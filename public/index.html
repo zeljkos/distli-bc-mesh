@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Distli Mesh BC</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .stat {
+            padding: 10px;
+            background: #e9ecef;
+            border-radius: 4px;
+            text-align: center;
+        }
+        .stat strong {
+            display: block;
+            font-size: 18px;
+            color: #007bff;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+        input[type="text"], select {
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .refresh-btn {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 10px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .refresh-btn:hover {
+            background: #218838;
+        }
+        .log {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 10px;
+            border-radius: 4px;
+            height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .block {
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            padding: 10px;
+            margin: 10px 0;
+        }
+        .block-header {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .block-data {
+            color: #666;
+            font-size: 14px;
+        }
+        .peers {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .peer {
+            background: #d4edda;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <h1>Distli Mesh BC - Multi-Tenant</h1>
+    
+    <div class="container">
+        <div class="status">
+            <div class="stat">
+                <strong id="peer-count">0</strong>
+                <div>Peers</div>
+            </div>
+            <div class="stat">
+                <strong id="block-count">1</strong>
+                <div>Blocks</div>
+            </div>
+            <div class="stat">
+                <strong id="pending-count">0</strong>
+                <div>Pending</div>
+            </div>
+            <div class="stat">
+                <strong id="status">Disconnected</strong>
+                <div>Status</div>
+            </div>
+            <div class="stat">
+                <strong id="network-name">None</strong>
+                <div>Network</div>
+            </div>
+        </div>
+        
+        <div style="margin-bottom: 15px;">
+            <label>Server: </label>
+            <input type="text" id="server-input" value="" placeholder="server-ip:3030" style="width: 150px;">
+            <label style="margin-left: 15px;">Network: </label>
+            <select id="network-select" style="width: 180px;">
+                <option value="">Select network...</option>
+            </select>
+            <input type="text" id="network-input" value="" placeholder="or enter new" style="width: 120px; margin-left: 5px;">
+            <button id="refresh-networks-btn" class="refresh-btn" style="margin-left: 5px;" title="Refresh network list">↻</button>
+        </div>
+        <div style="margin-bottom: 15px; font-size: 12px; color: #666;">
+            💡 Select from existing networks or type a new name to create one
+        </div>
+        
+        <div>
+            <button id="connect-btn">Connect</button>
+            <button id="join-network-btn" disabled>Join Network</button>
+            <button id="discover-btn" disabled>Discover Peers</button>
+            <button id="connect-all-btn" disabled>Connect All</button>
+        </div>
+    </div>
+
+    <div class="container">
+        <h3>Network Information</h3>
+        <div style="display: flex; gap: 20px; margin-bottom: 15px;">
+            <div>Network: <strong id="current-network-display">Not joined</strong></div>
+            <div>Network Peers: <strong id="network-peer-count">0</strong></div>
+            <div>Connected: <strong id="connected-peer-count">0</strong></div>
+        </div>
+    </div>
+
+    <div class="container">
+        <h3>Connected Peers</h3>
+        <div class="peers" id="peers-list">
+            <div>No peers connected</div>
+        </div>
+    </div>
+
+    <div class="container">
+        <h3>Send Transaction</h3>
+        <input type="text" id="tx-input" placeholder="Enter message">
+        <button id="send-btn" disabled>Send</button>
+        <button id="mine-btn" disabled>Mine Block</button>
+    </div>
+
+    <div class="container">
+        <h3>Blockchain</h3>
+        <div id="blockchain"></div>
+    </div>
+
+    <div class="container">
+        <h3>Activity Log</h3>
+        <div class="log" id="log"></div>
+    </div>
+
+    <script>
+        class SimpleBlockchain {
+            constructor() {
+                this.chain = [this.createGenesis()];
+                this.pending = [];
+            }
+            
+            createGenesis() {
+                return {
+                    id: 0,
+                    hash: "000genesis",
+                    prev_hash: "0",
+                    timestamp: Date.now(),
+                    data: "Genesis Block",
+                    nonce: 0
+                };
+            }
+            
+            addTransaction(data) {
+                const tx = {
+                    id: Date.now().toString(),
+                    data: data,
+                    timestamp: Date.now()
+                };
+                this.pending.push(tx);
+                return tx;
+            }
+            
+            mineBlock() {
+                if (this.pending.length === 0) return null;
+                
+                const lastBlock = this.chain[this.chain.length - 1];
+                const data = this.pending.map(tx => tx.data).join(", ");
+                
+                const block = {
+                    id: lastBlock.id + 1,
+                    hash: "000" + Date.now().toString(),
+                    prev_hash: lastBlock.hash,
+                    timestamp: Date.now(),
+                    data: data,
+                    nonce: Math.floor(Math.random() * 1000000)
+                };
+                
+                this.chain.push(block);
+                this.pending = [];
+                return block;
+            }
+            
+            addBlock(block) {
+                const lastBlock = this.chain[this.chain.length - 1];
+                if (block.id === lastBlock.id + 1 && block.prev_hash === lastBlock.hash) {
+                    this.chain.push(block);
+                    return true;
+                }
+                return false;
+            }
+        }
+
+        class MeshManager {
+            constructor() {
+                this.ws = null;
+                this.peers = new Map();
+                this.dataChannels = new Map();
+                this.availablePeers = [];
+                this.connected = false;
+                this.currentNetwork = null;
+                this.networkPeerCount = 0;
+                this.serverUrl = '';
+            }
+            
+            async connect() {
+                try {
+                    // Get server from input or use current host
+                    const serverInput = document.getElementById('server-input').value.trim();
+                    const server = serverInput || `${window.location.hostname}:3030`;
+                    this.serverUrl = server;
+                    const wsUrl = `ws://${server}/ws`;
+                    
+                    this.ws = new WebSocket(wsUrl);
+                    
+                    this.ws.onopen = () => {
+                        this.connected = true;
+                        log('Connected to tracker');
+                        this.refreshNetworkList();
+                        updateUI();
+                    };
+                    
+                    this.ws.onclose = () => {
+                        this.connected = false;
+                        this.currentNetwork = null;
+                        log('Disconnected from tracker');
+                        updateUI();
+                    };
+                    
+                    this.ws.onmessage = (event) => {
+                        const message = JSON.parse(event.data);
+                        this.handleMessage(message);
+                    };
+                    
+                } catch (error) {
+                    log('Connection failed: ' + error.message);
+                }
+            }
+            
+            async refreshNetworkList() {
+                if (!this.serverUrl) return;
+                
+                try {
+                    const response = await fetch(`http://${this.serverUrl}/api/network-list`);
+                    const networks = await response.json();
+                    this.updateNetworkDropdown(networks);
+                } catch (error) {
+                    log('Failed to fetch network list: ' + error.message);
+                }
+            }
+            
+            getSelectedNetwork() {
+                const selectValue = document.getElementById('network-select').value;
+                const inputValue = document.getElementById('network-input').value.trim();
+                
+                // Use dropdown selection or manual input
+                return selectValue || inputValue || null;
+            }
+            
+            joinNetwork(networkId) {
+                if (this.connected && networkId) {
+                    this.send({
+                        type: 'join_network',
+                        network_id: networkId
+                    });
+                    log('Joining network: ' + networkId);
+                }
+            }
+            
+            handleMessage(message) {
+                switch (message.type) {
+                    case 'network_list_update':
+                        this.updateNetworkDropdown(message.networks);
+                        break;
+                        
+                    case 'network_info':
+                        this.currentNetwork = message.network_id;
+                        this.networkPeerCount = message.peer_count;
+                        log('Joined network: ' + message.network_id + ' (' + message.peer_count + ' peers)');
+                        updateUI();
+                        break;
+                        
+                    case 'peers':
+                        this.availablePeers = message.peers;
+                        log('Available peers in network: ' + message.peers.length);
+                        updateUI();
+                        break;
+                        
+                    case 'offer':
+                        this.handleOffer(message.target, message.offer);
+                        break;
+                        
+                    case 'answer':
+                        this.handleAnswer(message.target, message.answer);
+                        break;
+                        
+                    case 'candidate':
+                        this.handleCandidate(message.target, message.candidate);
+                        break;
+                        
+                    case 'block':
+                        blockchain.addBlock(message.block);
+                        log('Received block #' + message.block.id);
+                        updateUI();
+                        break;
+                        
+                    case 'transaction':
+                        blockchain.addTransaction(message.transaction.data);
+                        log('Received transaction');
+                        updateUI();
+                        break;
+                }
+            }
+            
+            updateNetworkDropdown(networks) {
+                const select = document.getElementById('network-select');
+                
+                // Clear existing options except the first one
+                while (select.children.length > 1) {
+                    select.removeChild(select.lastChild);
+                }
+                
+                // Add network options
+                networks.forEach(network => {
+                    const option = document.createElement('option');
+                    option.value = network.id;
+                    option.textContent = `${network.name} (${network.peer_count} peers)`;
+                    select.appendChild(option);
+                });
+                
+                log(`Network list updated: ${networks.length} networks available`);
+            }
+            
+            async connectToPeer(peerId) {
+                if (this.peers.has(peerId)) return;
+                
+                const pc = new RTCPeerConnection({
+                    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+                });
+                
+                const dc = pc.createDataChannel('blockchain');
+                this.setupDataChannel(dc, peerId);
+                
+                pc.ondatachannel = (event) => {
+                    this.setupDataChannel(event.channel, peerId);
+                };
+                
+                pc.onicecandidate = (event) => {
+                    if (event.candidate) {
+                        this.send({
+                            type: 'candidate',
+                            target: peerId,
+                            candidate: event.candidate
+                        });
+                    }
+                };
+                
+                this.peers.set(peerId, pc);
+                
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+                
+                this.send({
+                    type: 'offer',
+                    target: peerId,
+                    offer: offer
+                });
+            }
+            
+            async handleOffer(peerId, offer) {
+                if (this.peers.has(peerId)) return;
+                
+                const pc = new RTCPeerConnection({
+                    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+                });
+                
+                pc.ondatachannel = (event) => {
+                    this.setupDataChannel(event.channel, peerId);
+                };
+                
+                pc.onicecandidate = (event) => {
+                    if (event.candidate) {
+                        this.send({
+                            type: 'candidate',
+                            target: peerId,
+                            candidate: event.candidate
+                        });
+                    }
+                };
+                
+                this.peers.set(peerId, pc);
+                
+                await pc.setRemoteDescription(offer);
+                const answer = await pc.createAnswer();
+                await pc.setLocalDescription(answer);
+                
+                this.send({
+                    type: 'answer',
+                    target: peerId,
+                    answer: answer
+                });
+            }
+            
+            async handleAnswer(peerId, answer) {
+                const pc = this.peers.get(peerId);
+                if (pc) {
+                    await pc.setRemoteDescription(answer);
+                }
+            }
+            
+            async handleCandidate(peerId, candidate) {
+                const pc = this.peers.get(peerId);
+                if (pc) {
+                    await pc.addIceCandidate(candidate);
+                }
+            }
+            
+            setupDataChannel(dc, peerId) {
+                dc.onopen = () => {
+                    this.dataChannels.set(peerId, dc);
+                    log('Connected to peer: ' + peerId.substring(0, 8));
+                    updateUI();
+                };
+                
+                dc.onmessage = (event) => {
+                    const message = JSON.parse(event.data);
+                    if (message.type === 'block') {
+                        blockchain.addBlock(message.block);
+                        log('Received block from peer');
+                        updateUI();
+                    }
+                };
+                
+                dc.onclose = () => {
+                    this.dataChannels.delete(peerId);
+                    log('Disconnected from peer: ' + peerId.substring(0, 8));
+                    updateUI();
+                };
+            }
+            
+            send(message) {
+                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    this.ws.send(JSON.stringify(message));
+                }
+            }
+            
+            broadcast(message) {
+                this.dataChannels.forEach((dc) => {
+                    if (dc.readyState === 'open') {
+                        dc.send(JSON.stringify(message));
+                    }
+                });
+            }
+            
+            async connectToAll() {
+                for (const peerId of this.availablePeers) {
+                    await this.connectToPeer(peerId);
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+            }
+        }
+
+        // Global instances
+        const blockchain = new SimpleBlockchain();
+        const mesh = new MeshManager();
+
+        // UI functions
+        function log(message) {
+            const logDiv = document.getElementById('log');
+            const time = new Date().toLocaleTimeString();
+            logDiv.innerHTML += time + ': ' + message + '\n';
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function updateUI() {
+            document.getElementById('peer-count').textContent = mesh.dataChannels.size;
+            document.getElementById('block-count').textContent = blockchain.chain.length;
+            document.getElementById('pending-count').textContent = blockchain.pending.length;
+            document.getElementById('status').textContent = mesh.connected ? 'Connected' : 'Disconnected';
+            document.getElementById('network-name').textContent = mesh.currentNetwork || 'None';
+
+            // Network information
+            document.getElementById('current-network-display').textContent = mesh.currentNetwork || 'Not joined';
+            document.getElementById('network-peer-count').textContent = mesh.networkPeerCount;
+            document.getElementById('connected-peer-count').textContent = mesh.dataChannels.size;
+
+            document.getElementById('connect-btn').textContent = mesh.connected ? 'Disconnect' : 'Connect';
+            document.getElementById('join-network-btn').disabled = !mesh.connected;
+            document.getElementById('discover-btn').disabled = !mesh.currentNetwork;
+            document.getElementById('connect-all-btn').disabled = !mesh.currentNetwork || mesh.availablePeers.length === 0;
+            document.getElementById('send-btn').disabled = mesh.dataChannels.size === 0;
+            document.getElementById('mine-btn').disabled = blockchain.pending.length === 0;
+            
+            updatePeersList();
+            updateBlockchain();
+        }
+
+        function updatePeersList() {
+            const peersDiv = document.getElementById('peers-list');
+            peersDiv.innerHTML = '';
+            
+            if (mesh.dataChannels.size === 0) {
+                peersDiv.innerHTML = '<div>No peers connected</div>';
+                return;
+            }
+            
+            mesh.dataChannels.forEach((dc, peerId) => {
+                const peerDiv = document.createElement('div');
+                peerDiv.className = 'peer';
+                peerDiv.textContent = peerId.substring(0, 8);
+                peersDiv.appendChild(peerDiv);
+            });
+        }
+
+        function updateBlockchain() {
+            const blockchainDiv = document.getElementById('blockchain');
+            blockchainDiv.innerHTML = '';
+            
+            blockchain.chain.forEach((block, index) => {
+                const blockDiv = document.createElement('div');
+                blockDiv.className = 'block';
+                blockDiv.innerHTML = `
+                    <div class="block-header">Block #${block.id}</div>
+                    <div class="block-data">Data: ${block.data}</div>
+                    <div class="block-data">Hash: ${block.hash}</div>
+                    <div class="block-data">Time: ${new Date(block.timestamp).toLocaleTimeString()}</div>
+                `;
+                blockchainDiv.appendChild(blockDiv);
+            });
+        }
+
+        // Event listeners
+        document.getElementById('connect-btn').addEventListener('click', () => {
+            if (mesh.connected) {
+                mesh.ws.close();
+            } else {
+                mesh.connect();
+            }
+        });
+
+        document.getElementById('join-network-btn').addEventListener('click', () => {
+            const networkId = mesh.getSelectedNetwork();
+            if (networkId) {
+                mesh.joinNetwork(networkId);
+            } else {
+                log('Please select or enter a network name');
+            }
+        });
+
+        document.getElementById('refresh-networks-btn').addEventListener('click', () => {
+            mesh.refreshNetworkList();
+        });
+
+        // Auto-refresh network list when dropdown is opened
+        document.getElementById('network-select').addEventListener('focus', () => {
+            if (mesh.connected) {
+                mesh.refreshNetworkList();
+            }
+        });
+
+        // Clear manual input when dropdown selection changes
+        document.getElementById('network-select').addEventListener('change', () => {
+            if (document.getElementById('network-select').value) {
+                document.getElementById('network-input').value = '';
+            }
+        });
+
+        // Clear dropdown when manual input is used
+        document.getElementById('network-input').addEventListener('input', () => {
+            if (document.getElementById('network-input').value.trim()) {
+                document.getElementById('network-select').value = '';
+            }
+        });
+
+        document.getElementById('discover-btn').addEventListener('click', () => {
+            mesh.send({ type: 'peers', peers: [] });
+            log('Discovering peers in network...');
+        });
+
+        document.getElementById('connect-all-btn').addEventListener('click', () => {
+            mesh.connectToAll();
+            log('Connecting to all peers in network...');
+        });
+
+        document.getElementById('send-btn').addEventListener('click', () => {
+            const input = document.getElementById('tx-input');
+            const data = input.value.trim();
+            if (data) {
+                blockchain.addTransaction(data);
+                mesh.send({
+                    type: 'transaction',
+                    transaction: { data: data, timestamp: Date.now() }
+                });
+                log('Sent transaction: ' + data);
+                input.value = '';
+                updateUI();
+            }
+        });
+
+        document.getElementById('mine-btn').addEventListener('click', () => {
+            const block = blockchain.mineBlock();
+            if (block) {
+                mesh.broadcast({ type: 'block', block: block });
+                mesh.send({ type: 'block', block: block });
+                log('Mined block #' + block.id);
+                updateUI();
+            }
+        });
+
+        // Initialize
+        document.getElementById('server-input').value = `${window.location.hostname}:3030`;
+        updateUI();
+        log('Application started');
+    </script>
+</body>
+</html>
