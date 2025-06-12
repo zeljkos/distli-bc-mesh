@@ -3,6 +3,18 @@ name = "distli-mesh-bc"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name = "tracker"
+path = "src/tracker/main.rs"
+
+[[bin]]
+name = "enterprise-validator"
+path = "src/enterprise_bc/validator_main.rs"
+
+[[bin]]
+name = "enterprise-dashboard"
+path = "src/enterprise_bc/dashboard_main.rs"
+
 [dependencies]
 tokio = { version = "1.0", features = ["full"] }
 warp = "0.3"
@@ -13,3 +25,8 @@ futures-util = "0.3"
 tokio-stream = "0.1"
 sha2 = "0.10"
 hex = "0.4"
+dashmap = "5.4"
+reqwest = { version = "0.11", features = ["json"] }
+tracing = "0.1"
+tracing-subscriber = "0.3"
+clap = { version = "4.0", features = ["derive"] }

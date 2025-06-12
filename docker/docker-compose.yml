@@ -1,0 +1,95 @@
+version: '3.8'
+
+services:
+  validator1:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    command: cargo run --bin enterprise-validator -- --id validator1 --port 8080
+    ports:
+      - "8081:8080"
+    environment:
+      - VALIDATOR_PEERS=validator1:8080,validator2:8080,validator3:8080
+      - RUST_LOG=info
+    networks:
+      - enterprise-bc
+    volumes:
+      - validator1_data:/app/data
+    restart: unless-stopped
+
+  validator2:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    command: cargo run --bin enterprise-validator -- --id validator2 --port 8080
+    ports:
+      - "8082:8080"
+    environment:
+      - VALIDATOR_PEERS=validator1:8080,validator2:8080,validator3:8080
+      - RUST_LOG=info
+    networks:
+      - enterprise-bc
+    volumes:
+      - validator2_data:/app/data
+    restart: unless-stopped
+    depends_on:
+      - validator1
+
+  validator3:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    command: cargo run --bin enterprise-validator -- --id validator3 --port 8080
+    ports:
+      - "8083:8080"
+    environment:
+      - VALIDATOR_PEERS=validator1:8080,validator2:8080,validator3:8080
+      - RUST_LOG=info
+    networks:
+      - enterprise-bc
+    volumes:
+      - validator3_data:/app/data
+    restart: unless-stopped
+    depends_on:
+      - validator1
+
+  dashboard:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    command: cargo run --bin enterprise-dashboard -- --port 9090
+    ports:
+      - "9090:9090"
+    environment:
+      - RUST_LOG=info
+    networks:
+      - enterprise-bc
+    restart: unless-stopped
+    depends_on:
+      - validator1
+      - validator2
+      - validator3
+
+  # Nginx proxy to load balance validator requests
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    networks:
+      - enterprise-bc
+    depends_on:
+      - validator1
+      - validator2
+      - validator3
+    restart: unless-stopped
+
+networks:
+  enterprise-bc:
+    driver: bridge
+
+volumes:
+  validator1_data:
+  validator2_data:
+  validator3_data:

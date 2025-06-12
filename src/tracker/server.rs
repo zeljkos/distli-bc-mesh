@@ -1,4 +1,6 @@
-use crate::types::{Message, NetworkPeer};
+// Multi-tenant WebSocket tracker server (moved from original tracker.rs)
+use crate::common::types::{Message, NetworkPeer};
+use crate::common::api_utils;
 use futures_util::{SinkExt, StreamExt};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -8,7 +10,7 @@ use uuid::Uuid;
 use warp::ws::{WebSocket, Message as WsMessage};
 use warp::Filter;
 
-type Networks = Arc<RwLock<HashMap<String, HashMap<String, NetworkPeer>>>>;
+pub type Networks = Arc<RwLock<HashMap<String, HashMap<String, NetworkPeer>>>>;
 type GlobalPeers = Arc<RwLock<HashMap<String, mpsc::UnboundedSender<Result<WsMessage, warp::Error>>>>>;
 
 pub struct Tracker {
@@ -22,6 +24,10 @@ impl Tracker {
             networks: Arc::new(RwLock::new(HashMap::new())),
             global_peers: Arc::new(RwLock::new(HashMap::new())),
         }
+    }
+    
+    pub fn get_networks_ref(&self) -> Networks {
+        self.networks.clone()
     }
     
     pub async fn run(&self) {
@@ -48,45 +54,26 @@ impl Tracker {
             .and(warp::get())
             .and(warp::any().map(move || networks_for_list.clone()))
             .and_then(get_network_list);
+
+        let health = warp::path("health")
+            .and(warp::get())
+            .map(|| api_utils::health_check());
             
         let static_files = warp::fs::dir("public");
         
-        let routes = ws_route.or(api_route).or(api_list_route).or(static_files);
+        let routes = ws_route
+            .or(api_route)
+            .or(api_list_route)
+            .or(health)
+            .or(static_files)
+            .with(warp::cors().allow_any_origin());
         
         println!("Multi-tenant tracker running on http://0.0.0.0:3030");
         warp::serve(routes).run(([0, 0, 0, 0], 3030)).await;
     }
 }
 
-async fn get_networks_info(networks: Networks) -> Result<impl warp::Reply, warp::Rejection> {
-    let networks_lock = networks.read().await;
-    let mut info = HashMap::new();
-    
-    for (network_id, peers) in networks_lock.iter() {
-        info.insert(network_id.clone(), peers.len());
-    }
-    
-    Ok(warp::reply::json(&info))
-}
-
-async fn get_network_list(networks: Networks) -> Result<impl warp::Reply, warp::Rejection> {
-    let networks_lock = networks.read().await;
-    let mut network_list = Vec::new();
-    
-    for (network_id, peers) in networks_lock.iter() {
-        network_list.push(serde_json::json!({
-            "id": network_id,
-            "name": network_id,
-            "peer_count": peers.len()
-        }));
-    }
-    
-    // Sort by name for consistent ordering
-    network_list.sort_by(|a, b| a["name"].as_str().unwrap().cmp(b["name"].as_str().unwrap()));
-    
-    Ok(warp::reply::json(&network_list))
-}
-
+// Rest of the tracker implementation (handle_peer, etc.) - same as before but using common types
 async fn handle_peer(ws: WebSocket, networks: Networks, global_peers: GlobalPeers) {
     let peer_id = Uuid::new_v4().to_string();
     let (mut peer_ws_tx, mut peer_ws_rx) = ws.split();
@@ -100,7 +87,7 @@ async fn handle_peer(ws: WebSocket, networks: Networks, global_peers: GlobalPeer
     
     // Send current network list to new peer
     let _ = send_network_list_update(&global_peers, &peer_id).await;
-    
+
     // Handle outgoing messages
     let peer_id_clone = peer_id.clone();
     tokio::task::spawn(async move {
@@ -194,6 +181,36 @@ async fn handle_peer(ws: WebSocket, networks: Networks, global_peers: GlobalPeer
     println!("Peer {} disconnected", &peer_id[..8]);
 }
 
+// Helper functions (same logic as before but using common types)
+async fn get_networks_info(networks: Networks) -> Result<impl warp::Reply, warp::Rejection> {
+    let networks_lock = networks.read().await;
+    let mut info = HashMap::new();
+    
+    for (network_id, peers) in networks_lock.iter() {
+        info.insert(network_id.clone(), peers.len());
+    }
+    
+    Ok(warp::reply::json(&info))
+}
+
+async fn get_network_list(networks: Networks) -> Result<impl warp::Reply, warp::Rejection> {
+    let networks_lock = networks.read().await;
+    let mut network_list = Vec::new();
+    
+    for (network_id, peers) in networks_lock.iter() {
+        network_list.push(serde_json::json!({
+            "id": network_id,
+            "name": network_id,
+            "peer_count": peers.len()
+        }));
+    }
+    
+    network_list.sort_by(|a, b| a["name"].as_str().unwrap().cmp(b["name"].as_str().unwrap()));
+    
+    Ok(warp::reply::json(&network_list))
+}
+
+// Additional helper functions (same as before)
 async fn get_network_peers(networks: &Networks, network_id: &str, exclude_peer: &str) -> Vec<String> {
     let networks_lock = networks.read().await;
     if let Some(network_peers) = networks_lock.get(network_id) {
@@ -276,8 +293,7 @@ async fn broadcast_to_network(networks: &Networks, network_id: &str, sender_id: 
 }
 
 async fn send_network_list_update(global_peers: &GlobalPeers, peer_id: &str) -> Result<(), Box<dyn std::error::Error>> {
-    // This is a simplified version - you could get actual network data here
-    let networks: Vec<serde_json::Value> = Vec::new(); // Empty for now
+    let networks: Vec<serde_json::Value> = Vec::new();
     
     let global_peers_lock = global_peers.read().await;
     if let Some(sender) = global_peers_lock.get(peer_id) {
@@ -300,7 +316,6 @@ async fn broadcast_network_list_update(networks: &Networks, global_peers: &Globa
         }));
     }
     
-    // Sort by name for consistent ordering
     network_list.sort_by(|a, b| a["name"].as_str().unwrap().cmp(b["name"].as_str().unwrap()));
     
     drop(networks_lock);
