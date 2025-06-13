@@ -13,13 +13,13 @@ pub use common::{
 
 // Enterprise blockchain exports
 pub use enterprise_bc::{
-    blockchain::{EnterpriseBlock, TenantSummary, EnterpriseBlockchain},
-    validator::Validator,
-    consensus::ConsensusEngine,
+    EnterpriseBlock, TenantSummary, EnterpriseBlockchain,
+    Validator,
+    ConsensusEngine,
 };
 
 // Tracker exports  
 pub use tracker::{
-    server::Tracker,
-    integration::EnterpriseIntegration,
+    Tracker,
+    EnterpriseIntegration,
 };

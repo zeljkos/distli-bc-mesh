@@ -2,6 +2,7 @@
 pub mod server;
 pub mod integration;
 
-// Re-export main types
+// Re-export main types with proper names
 pub use server::Tracker;
 pub use integration::EnterpriseIntegration;
+pub use integration::BlockchainUpdate;

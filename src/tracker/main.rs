@@ -15,15 +15,23 @@ async fn main() {
         .unwrap_or_else(|_| "http://192.168.200.133:8080".to_string());
     
     if !enterprise_url.is_empty() {
-        let mut enterprise = EnterpriseIntegration::new(enterprise_url);
+        // Set up integration for blockchain updates (for the API handler)
+        let enterprise_for_server = EnterpriseIntegration::new(enterprise_url.clone());
+        tracker.set_integration(enterprise_for_server).await;
+        
+        // Start reporting loop with separate integration instance
+        let mut enterprise_reporter = EnterpriseIntegration::new(enterprise_url);
         let networks_clone = networks.clone();
         
         tokio::spawn(async move {
-            enterprise.start_reporting_loop(networks_clone).await;
+            enterprise_reporter.start_reporting_loop(networks_clone).await;
         });
         
         println!("Enterprise blockchain integration enabled");
+    } else {
+        println!("No enterprise blockchain URL provided - running in standalone mode");
     }
     
+    // Start the tracker server
     tracker.run().await;
 }

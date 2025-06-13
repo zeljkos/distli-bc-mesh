@@ -72,6 +72,12 @@ impl Validator {
         
         loop {
             timer.tick().await;
+             // ADD HEARTBEAT UPDATE
+            {
+                 let mut bc = blockchain.write().await;
+                 bc.update_validator_heartbeat(validator_id.clone());
+                 bc.cleanup_stale_validators(); // Remove stale validators
+            }
             
             let should_produce = {
                 let bc = blockchain.read().await;

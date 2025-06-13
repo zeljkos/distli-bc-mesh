@@ -1,6 +1,7 @@
 // Multi-tenant WebSocket tracker server (moved from original tracker.rs)
 use crate::common::types::{Message, NetworkPeer};
 use crate::common::api_utils;
+use crate::tracker::integration::{BlockchainUpdate, EnterpriseIntegration}; // ADD THESE IMPORTS
 use futures_util::{SinkExt, StreamExt};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -9,13 +10,18 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 use uuid::Uuid;
 use warp::ws::{WebSocket, Message as WsMessage};
 use warp::Filter;
+use serde_json::json; // ADD THIS IMPORT
 
 pub type Networks = Arc<RwLock<HashMap<String, HashMap<String, NetworkPeer>>>>;
 type GlobalPeers = Arc<RwLock<HashMap<String, mpsc::UnboundedSender<Result<WsMessage, warp::Error>>>>>;
 
+// ADD: Shared integration for blockchain updates
+pub type SharedIntegration = Arc<RwLock<Option<EnterpriseIntegration>>>;
+
 pub struct Tracker {
     networks: Networks,
     global_peers: GlobalPeers,
+    integration: SharedIntegration, // ADD THIS FIELD
 }
 
 impl Tracker {
@@ -23,6 +29,7 @@ impl Tracker {
         Tracker {
             networks: Arc::new(RwLock::new(HashMap::new())),
             global_peers: Arc::new(RwLock::new(HashMap::new())),
+            integration: Arc::new(RwLock::new(None)), // INITIALIZE THIS
         }
     }
     
@@ -30,9 +37,16 @@ impl Tracker {
         self.networks.clone()
     }
     
+    // ADD: Method to set enterprise integration
+    pub async fn set_integration(&self, integration: EnterpriseIntegration) {
+        let mut int_lock = self.integration.write().await;
+        *int_lock = Some(integration);
+    }
+    
     pub async fn run(&self) {
         let networks = self.networks.clone();
         let global_peers = self.global_peers.clone();
+        let integration = self.integration.clone();
         
         let ws_route = warp::path("ws")
             .and(warp::ws())
@@ -40,6 +54,14 @@ impl Tracker {
             .map(|ws: warp::ws::Ws, (networks, global_peers)| {
                 ws.on_upgrade(move |socket| handle_peer(socket, networks, global_peers))
             });
+
+        // ADD: Blockchain update route
+        let blockchain_update_route = warp::path("api")
+            .and(warp::path("blockchain-update"))
+            .and(warp::post())
+            .and(warp::body::json())
+            .and(warp::any().map(move || integration.clone()))
+            .and_then(handle_blockchain_update);
 
         let networks_for_api = self.networks.clone();
         let api_route = warp::path("api")
@@ -62,6 +84,7 @@ impl Tracker {
         let static_files = warp::fs::dir("public");
         
         let routes = ws_route
+            .or(blockchain_update_route) // ADD THIS LINE
             .or(api_route)
             .or(api_list_route)
             .or(health)
@@ -73,6 +96,58 @@ impl Tracker {
     }
 }
 
+// ADD: Handler for blockchain updates
+// ENHANCED: Add better logging to handle_blockchain_update in server.rs
+async fn handle_blockchain_update(
+    update: BlockchainUpdate,
+    integration: SharedIntegration
+) -> Result<impl warp::Reply, warp::Rejection> {
+    println!("Received blockchain update from {}: {} blocks, {} transactions", 
+             update.network_id, update.block_count, update.transaction_count);
+    
+    // Log actual block data if present
+    if !update.latest_blocks.is_empty() {
+        println!("Block details received:");
+        for block in &update.latest_blocks {
+            if block.data != "Genesis Block" {
+                println!("   Block #{}: \"{}\" (hash: {})", block.id, block.data, &block.hash[..8]);
+            }
+        }
+    }
+    
+    // Update the integration state AND immediately report
+    {
+        let mut int_lock = integration.write().await;
+        if let Some(ref mut integration_instance) = int_lock.as_mut() {
+            // Store the blockchain data
+            integration_instance.update_network_blockchain_state_with_blocks(&update);
+            
+            // 🚀 IMMEDIATELY report to enterprise BC with actual block content
+            println!("Immediately reporting to enterprise BC...");
+            
+            if let Err(e) = integration_instance.report_immediately(&update.network_id).await {
+                println!("Immediate report failed: {}", e);
+            } else {
+                println!("Immediate report sent to enterprise BC!");
+            }
+        } else {
+            println!("No enterprise integration configured");
+        }
+    }
+    
+    Ok(warp::reply::json(&json!({
+        "status": "success",
+        "message": "Blockchain update received and immediately reported",
+        "network_id": update.network_id,
+        "blocks": update.block_count,
+        "transactions": update.transaction_count,
+        "block_details": update.latest_blocks.len(),
+        "immediate_report": true
+    })))
+}
+
+////
+////
 // Rest of the tracker implementation (handle_peer, etc.) - same as before but using common types
 async fn handle_peer(ws: WebSocket, networks: Networks, global_peers: GlobalPeers) {
     let peer_id = Uuid::new_v4().to_string();

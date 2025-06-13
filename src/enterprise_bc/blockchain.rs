@@ -29,16 +29,45 @@ pub struct EnterpriseBlockchain {
     pub chain: Vec<EnterpriseBlock>,
     pub pending_tenant_updates: Vec<TenantUpdate>,
     pub validator_id: String,
+    pub active_validators: std::collections::HashSet<String>, // ADD THIS
+    pub last_validator_heartbeat: std::collections::HashMap<String, u64>, // ADD THIS
 }
 
 impl EnterpriseBlockchain {
     pub fn new(validator_id: String) -> Self {
         let genesis = Self::create_genesis_block();
+        let mut active_validators = std::collections::HashSet::new();
+        active_validators.insert(validator_id.clone()); // Add self
         
         EnterpriseBlockchain {
             chain: vec![genesis],
             pending_tenant_updates: Vec::new(),
             validator_id,
+            active_validators,                           // ADD THIS
+            last_validator_heartbeat: std::collections::HashMap::new(), // ADD THIS
+        }
+    }
+       // ADD THIS METHOD to track validator heartbeats
+    pub fn update_validator_heartbeat(&mut self, validator_id: String) {
+        use crate::common::time::current_timestamp;
+        self.active_validators.insert(validator_id.clone());
+        self.last_validator_heartbeat.insert(validator_id, current_timestamp());
+    }
+       // ADD THIS METHOD to clean up stale validators
+    pub fn cleanup_stale_validators(&mut self) {
+        use crate::common::time::current_timestamp;
+        let current_time = current_timestamp();
+        let timeout = 120; // 2 minutes timeout
+
+        let stale_validators: Vec<String> = self.last_validator_heartbeat
+            .iter()
+            .filter(|(_, &heartbeat)| current_time - heartbeat > timeout)
+            .map(|(id, _)| id.clone())
+            .collect();
+
+        for validator_id in stale_validators {
+            self.active_validators.remove(&validator_id);
+            self.last_validator_heartbeat.remove(&validator_id);
         }
     }
     
@@ -176,7 +205,8 @@ impl EnterpriseBlockchain {
             "validator": self.validator_id,
             "pending_updates": self.pending_tenant_updates.len(),
             "total_blocks": self.chain.len(),
-            "active_tenants": self.get_active_tenants().len()
+            "active_tenants": self.get_active_tenants().len(),
+            "active_validators": self.active_validators.len() // ADD THIS LINE
         })
     }
     
