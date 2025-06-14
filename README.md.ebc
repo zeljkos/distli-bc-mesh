@@ -1,3 +1,24 @@
+## Persistent Storage
+
+### Enterprise Blockchain
+- **Location**: `data/enterprise_blockchain_{validator_id}.json`
+- **Contains**: Complete blockchain state, pending updates, validator information
+- **Auto-saves**: On every block addition and state change
+
+### Tracker Integration  
+- **Location**: `data/tracker_integration.json`
+- **Contains**: Network states, reported data, blockchain summaries
+- **Auto-saves**: On every enterprise report
+
+### Web Client
+- **Location**: Browser memory (session-based per network)
+- **Contains**: Per-network blockchain state and transactions
+- **Auto-saves**: On every transaction and block mining
+
+
+
+
+
 # Migration Guide: Restructuring distli-mesh-bc
 
 ## 🎯 Goal: Single Project with Tracker + Enterprise BC

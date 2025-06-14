@@ -5,8 +5,6 @@ use std::collections::HashMap;
 use tokio::time::{interval, Duration};
 use tracing::{info, warn};
 use serde::{Deserialize, Serialize};
-use std::fs;
-use std::path::Path;
 
 // REMOVE this import as Networks will be passed as parameter
 // use crate::tracker::server::Networks;
@@ -38,10 +36,9 @@ pub struct EnterpriseIntegration {
     enterprise_url: String,
     last_reported_state: HashMap<String, TenantState>,
     network_blockchain_state: HashMap<String, NetworkBlockchainState>,
-    storage_path: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 struct TenantState {
     block_count: u64,
     transaction_count: u64,
@@ -49,7 +46,7 @@ struct TenantState {
     last_reported_block_id: u64, // NEW: Track last reported block
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 struct NetworkBlockchainState {
     total_blocks: u64,
     total_transactions: u64,
@@ -58,24 +55,13 @@ struct NetworkBlockchainState {
     last_block_id: u64, // NEW: Track highest block ID seen
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EnterpriseIntegrationData {
-    pub last_reported_state: HashMap<String, TenantState>,
-    pub network_blockchain_state: HashMap<String, NetworkBlockchainState>,
-}
-
 impl EnterpriseIntegration {
-
     pub fn new(enterprise_url: String) -> Self {
-        let storage_path = "data/tracker_integration.json".to_string();
-        let mut integration = EnterpriseIntegration {
+        EnterpriseIntegration {
             enterprise_url,
             last_reported_state: HashMap::new(),
             network_blockchain_state: HashMap::new(),
-            storage_path,
-        };
-        integration.load_from_disk();
-        integration
+        }
     }
     
     pub async fn start_reporting_loop(&mut self, networks: Networks) {
@@ -121,7 +107,7 @@ impl EnterpriseIntegration {
                     timestamp: current_timestamp(),
                 };
 
-                println!("Sending IMMEDIATE update with messages: {:?}", messages);
+                println!("🚀 Sending IMMEDIATE update with messages: {:?}", messages);
                 self.send_update_to_enterprise(&update).await?;
 
                 // Update tracking state
@@ -131,43 +117,16 @@ impl EnterpriseIntegration {
                     last_update: update.timestamp,
                     last_reported_block_id: state.last_block_id,
                 });
-                self.save_to_disk(); // ADD THIS LINE
 
-                println!(" Immediate report completed for {}", network_id);
+                println!("✅ Immediate report completed for {}", network_id);
             } else {
-                println!(" No changes to report for {}", network_id);
+                println!("ℹ️ No changes to report for {}", network_id);
             }
         } else {
-            println!(" No blockchain state found for {}", network_id);
+            println!("⚠️ No blockchain state found for {}", network_id);
         }
         Ok(())
     }
-    pub fn save_to_disk(&self) {
-        let data = EnterpriseIntegrationData {
-            last_reported_state: self.last_reported_state.clone(),
-            network_blockchain_state: self.network_blockchain_state.clone(),
-        };
-    
-        if let Ok(json) = serde_json::to_string_pretty(&data) {
-            if let Some(parent) = Path::new(&self.storage_path).parent() {
-                let _ = fs::create_dir_all(parent);
-            }
-            let _ = fs::write(&self.storage_path, json);
-        }
-    }
-
-    pub fn load_from_disk(&mut self) {
-        if Path::new(&self.storage_path).exists() {
-            if let Ok(content) = fs::read_to_string(&self.storage_path) {
-                if let Ok(data) = serde_json::from_str::<EnterpriseIntegrationData>(&content) {
-                    self.last_reported_state = data.last_reported_state;
-                    self.network_blockchain_state = data.network_blockchain_state;
-                }
-            }
-        }
-    }
-
-
     
     async fn collect_and_report_tenant_updates(
         &mut self,
@@ -226,7 +185,6 @@ impl EnterpriseIntegration {
                     last_update: update.timestamp,
                     last_reported_block_id: current_blocks.saturating_sub(1), // Track last reported block
                 });
-                self.save_to_disk(); // ADD THIS LINE
                 
                 info!("Reported REAL update for tenant {}: {} blocks, {} transactions, {} peers", 
                       network_id, blocks_added, transactions_added, current_peer_count);
@@ -332,9 +290,9 @@ impl EnterpriseIntegration {
         if state.recent_blocks.len() > 10 {
             state.recent_blocks = state.recent_blocks[state.recent_blocks.len()-10..].to_vec();
         }
+        
         info!("Updated state for {}: {} blocks, {} transactions, {} recent blocks", 
               update.network_id, state.total_blocks, state.total_transactions, state.recent_blocks.len());
-        self.save_to_disk(); // ADD THIS LINE
     }
     
     // BACKWARD COMPATIBILITY: Keep the old method for simple updates

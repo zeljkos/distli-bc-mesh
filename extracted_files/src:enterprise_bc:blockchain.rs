@@ -2,8 +2,6 @@
 use crate::common::{crypto::hash_data, time::current_timestamp, types::TenantUpdate};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::fs;
-use std::path::Path;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EnterpriseBlock {
@@ -33,69 +31,20 @@ pub struct EnterpriseBlockchain {
     pub validator_id: String,
     pub active_validators: std::collections::HashSet<String>, // ADD THIS
     pub last_validator_heartbeat: std::collections::HashMap<String, u64>, // ADD THIS
-    pub storage_path: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EnterpriseBlockchainData {
-    pub chain: Vec<EnterpriseBlock>,
-    pub pending_tenant_updates: Vec<TenantUpdate>,
-    pub validator_id: String,
-    pub active_validators: Vec<String>,
-    pub last_validator_heartbeat: HashMap<String, u64>,
 }
 
 impl EnterpriseBlockchain {
     pub fn new(validator_id: String) -> Self {
-        let storage_path = format!("data/enterprise_blockchain_{}.json", validator_id);
-        let mut blockchain = EnterpriseBlockchain {
-            chain: Vec::new(),
+        let genesis = Self::create_genesis_block();
+        let mut active_validators = std::collections::HashSet::new();
+        active_validators.insert(validator_id.clone()); // Add self
+        
+        EnterpriseBlockchain {
+            chain: vec![genesis],
             pending_tenant_updates: Vec::new(),
-            validator_id: validator_id.clone(),
-            active_validators: std::collections::HashSet::new(),
-            last_validator_heartbeat: std::collections::HashMap::new(),
-            storage_path,
-        };
-
-        blockchain.load_from_disk();
-
-        // If no data loaded, create genesis
-        if blockchain.chain.is_empty() {
-            let genesis = Self::create_genesis_block();
-            blockchain.chain.push(genesis);
-            blockchain.active_validators.insert(validator_id);
-            blockchain.save_to_disk();
-        }
-
-        blockchain
-    }
-    pub fn save_to_disk(&self) {
-        let data = EnterpriseBlockchainData {
-            chain: self.chain.clone(),
-            pending_tenant_updates: self.pending_tenant_updates.clone(),
-            validator_id: self.validator_id.clone(),
-            active_validators: self.active_validators.iter().cloned().collect(),
-            last_validator_heartbeat: self.last_validator_heartbeat.clone(),
-        };
-
-        if let Ok(json) = serde_json::to_string_pretty(&data) {
-            if let Some(parent) = Path::new(&self.storage_path).parent() {
-                let _ = fs::create_dir_all(parent);
-            }
-            let _ = fs::write(&self.storage_path, json);
-        }
-    }
-
-    pub fn load_from_disk(&mut self) {
-        if Path::new(&self.storage_path).exists() {
-            if let Ok(content) = fs::read_to_string(&self.storage_path) {
-                if let Ok(data) = serde_json::from_str::<EnterpriseBlockchainData>(&content) {
-                    self.chain = data.chain;
-                    self.pending_tenant_updates = data.pending_tenant_updates;
-                    self.active_validators = data.active_validators.into_iter().collect();
-                    self.last_validator_heartbeat = data.last_validator_heartbeat;
-                }
-            }
+            validator_id,
+            active_validators,                           // ADD THIS
+            last_validator_heartbeat: std::collections::HashMap::new(), // ADD THIS
         }
     }
        // ADD THIS METHOD to track validator heartbeats
@@ -103,7 +52,6 @@ impl EnterpriseBlockchain {
         use crate::common::time::current_timestamp;
         self.active_validators.insert(validator_id.clone());
         self.last_validator_heartbeat.insert(validator_id, current_timestamp());
-        self.save_to_disk();
     }
        // ADD THIS METHOD to clean up stale validators
     pub fn cleanup_stale_validators(&mut self) {
@@ -116,14 +64,10 @@ impl EnterpriseBlockchain {
             .filter(|(_, &heartbeat)| current_time - heartbeat > timeout)
             .map(|(id, _)| id.clone())
             .collect();
-        let has_stale_validators = !stale_validators.is_empty();
 
         for validator_id in stale_validators {
             self.active_validators.remove(&validator_id);
             self.last_validator_heartbeat.remove(&validator_id);
-        }
-        if has_stale_validators {
-            self.save_to_disk();
         }
     }
     
@@ -141,7 +85,6 @@ impl EnterpriseBlockchain {
     
     pub fn add_tenant_update(&mut self, update: TenantUpdate) {
         self.pending_tenant_updates.push(update);
-        self.save_to_disk();
     }
     
     pub fn create_new_block(&mut self) -> EnterpriseBlock {
@@ -168,7 +111,6 @@ impl EnterpriseBlockchain {
         if self.validate_block(&block) {
             self.chain.push(block);
             self.pending_tenant_updates.clear();
-            self.save_to_disk();
             true
         } else {
             false

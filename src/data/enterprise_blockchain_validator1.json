@@ -1,0 +1,86 @@
+{
+  "chain": [
+    {
+      "height": 0,
+      "hash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "timestamp": 1749905790,
+      "validator": "genesis",
+      "tenant_summaries": [],
+      "merkle_root": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "height": 1,
+      "hash": "dbe0891d1006c9c06f5354d7f1eba08ea962d34823095bbd0e18ed6ebd4dc466",
+      "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "timestamp": 1749905850,
+      "validator": "validator1",
+      "tenant_summaries": [
+        {
+          "tenant_id": "network_A",
+          "block_count": 4,
+          "transaction_count": 3,
+          "last_activity": 1749905837,
+          "peer_count": 3,
+          "messages": [
+            "1 transactions processed in network_A",
+            "New block mined in network_A",
+            "1 transactions processed in network_A",
+            "New block mined in network_A",
+            "1 transactions processed in network_A"
+          ]
+        }
+      ],
+      "merkle_root": "a35438de5dfc714d3e38e793f695cab490cd97603e4122a3c14dd091e9a06683"
+    },
+    {
+      "height": 2,
+      "hash": "940379626bd06bd825bdb3998bd3ad997de9d37e4fc0fb65204712ba8c337b75",
+      "previous_hash": "dbe0891d1006c9c06f5354d7f1eba08ea962d34823095bbd0e18ed6ebd4dc466",
+      "timestamp": 1749905940,
+      "validator": "validator1",
+      "tenant_summaries": [
+        {
+          "tenant_id": "network_A",
+          "block_count": 1,
+          "transaction_count": 1,
+          "last_activity": 1749905913,
+          "peer_count": 1,
+          "messages": [
+            "Block #1: \"message from one of the node 4ec82901 hello with tracker running\""
+          ]
+        }
+      ],
+      "merkle_root": "2e9f5e52d49c34b2bc41219bed33e1d5e2ebae711d810687d748201b353d0686"
+    },
+    {
+      "height": 3,
+      "hash": "2093552bc1993f2eab261284de7b3223094a06612bbe4f9c33ceb9ff1c97f8f2",
+      "previous_hash": "940379626bd06bd825bdb3998bd3ad997de9d37e4fc0fb65204712ba8c337b75",
+      "timestamp": 1749906090,
+      "validator": "validator1",
+      "tenant_summaries": [
+        {
+          "tenant_id": "network_A",
+          "block_count": 1,
+          "transaction_count": 1,
+          "last_activity": 1749906061,
+          "peer_count": 1,
+          "messages": [
+            "Block #2: \"message from one of the node 4ec82901 hello without  tracker running\"",
+            "Block #1: \"message from one of the node 4ec82901 hello with tracker running\""
+          ]
+        }
+      ],
+      "merkle_root": "7ba4b9ddadde1d3e7213a6a62382d27fbc051b579e906aee6d0814518355902f"
+    }
+  ],
+  "pending_tenant_updates": [],
+  "validator_id": "validator1",
+  "active_validators": [
+    "validator1"
+  ],
+  "last_validator_heartbeat": {
+    "validator1": 1749907920
+  }
+}
