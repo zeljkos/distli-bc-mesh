@@ -1,0 +1,27 @@
+# This .dockerignore should be in project root since build context is project root
+
+# Rust build artifacts
+target/
+
+# Docker directory itself (to avoid copying docker files into build context)
+docker/docker-compose.yml
+docker/setup.sh
+docker/nginx.conf
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Let Docker generate fresh Cargo.lock
+# Don't exclude it - let the newer Rust version handle it

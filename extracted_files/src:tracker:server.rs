@@ -1,8 +1,7 @@
-// Fixed tracker server - uses enterprise types throughout
+// Multi-tenant WebSocket tracker server - Updated for new blockchain design
 use crate::common::types::{Message, NetworkPeer};
 use crate::common::api_utils;
-use crate::tracker::integration::EnterpriseIntegration;
-use crate::enterprise_bc::TenantBlockchainUpdate; // Use enterprise type
+use crate::tracker::integration::{BlockchainUpdate, EnterpriseIntegration}; 
 use futures_util::{SinkExt, StreamExt};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -15,6 +14,8 @@ use serde_json::json;
 
 pub type Networks = Arc<RwLock<HashMap<String, HashMap<String, NetworkPeer>>>>;
 type GlobalPeers = Arc<RwLock<HashMap<String, mpsc::UnboundedSender<Result<WsMessage, warp::Error>>>>>;
+
+// Shared integration for blockchain updates
 pub type SharedIntegration = Arc<RwLock<Option<EnterpriseIntegration>>>;
 
 pub struct Tracker {
@@ -53,7 +54,7 @@ impl Tracker {
                 ws.on_upgrade(move |socket| handle_peer(socket, networks, global_peers))
             });
 
-        // Use enterprise format throughout
+        // UPDATED: Blockchain update route for new structure
         let blockchain_update_route = warp::path("api")
             .and(warp::path("blockchain-update"))
             .and(warp::post())
@@ -94,38 +95,46 @@ impl Tracker {
     }
 }
 
-// Use enterprise format
+// FIXED: Handler for new blockchain update structure
 async fn handle_blockchain_update(
-    update: TenantBlockchainUpdate,
+    update: BlockchainUpdate,
     integration: SharedIntegration
 ) -> Result<impl warp::Reply, warp::Rejection> {
     println!("Received blockchain update from {}: {} new blocks", 
              update.network_id, update.new_blocks.len());
     
+    // Calculate totals from new blocks
     let total_blocks = update.new_blocks.len();
     let total_transactions: usize = update.new_blocks.iter()
-        .map(|block| block.transactions.len())
+        .map(|block| {
+            if block.data == "Genesis Block" { 0 } else {
+                if block.data.contains(',') {
+                    block.data.split(',').count()
+                } else {
+                    1
+                }
+            }
+        })
         .sum();
     
-    // Log block details
+    // Log actual block data if present
     if !update.new_blocks.is_empty() {
         println!("Block details received:");
         for block in &update.new_blocks {
-            if !block.transactions.is_empty() {
-                println!("   Block #{}: {} transactions", block.block_id, block.transactions.len());
-                for tx in &block.transactions {
-                    println!("     - {}", tx);
-                }
+            if block.data != "Genesis Block" {
+                println!("   Block #{}: \"{}\" (hash: {})", block.id, block.data, &block.hash[..8]);
             }
         }
     }
     
-    // Forward to enterprise BC
+    // Update the integration state AND immediately report
     {
         let mut int_lock = integration.write().await;
         if let Some(ref mut integration_instance) = int_lock.as_mut() {
-            integration_instance.update_network_blockchain_state_with_update(&update).await;
-            println!("Blockchain data forwarded to enterprise BC!");
+            // Store the blockchain data
+            integration_instance.update_network_blockchain_state_with_blocks(&update).await;
+            
+            println!("Blockchain data updated and sent to enterprise BC!");
         } else {
             println!("No enterprise integration configured");
         }
@@ -137,11 +146,12 @@ async fn handle_blockchain_update(
         "network_id": update.network_id,
         "new_blocks": total_blocks,
         "transactions": total_transactions,
+        "block_details": update.new_blocks.len(),
         "immediate_processing": true
     })))
 }
 
-// Helper functions remain the same
+// Rest of the tracker implementation (handle_peer, etc.) - same as before
 async fn handle_peer(ws: WebSocket, networks: Networks, global_peers: GlobalPeers) {
     let peer_id = Uuid::new_v4().to_string();
     let (mut peer_ws_tx, mut peer_ws_rx) = ws.split();
@@ -150,9 +160,13 @@ async fn handle_peer(ws: WebSocket, networks: Networks, global_peers: GlobalPeer
     
     let mut current_network: Option<String> = None;
     
+    // Add to global peers for network list updates
     global_peers.write().await.insert(peer_id.clone(), tx.clone());
+    
+    // Send current network list to new peer
     let _ = send_network_list_update(&global_peers, &peer_id).await;
 
+    // Handle outgoing messages
     let peer_id_clone = peer_id.clone();
     tokio::task::spawn(async move {
         while let Some(message) = rx.next().await {
@@ -165,12 +179,14 @@ async fn handle_peer(ws: WebSocket, networks: Networks, global_peers: GlobalPeer
         println!("Peer {} message handler ended", &peer_id_clone[..8]);
     });
     
+    // Handle incoming messages
     while let Some(result) = peer_ws_rx.next().await {
         if let Ok(msg) = result {
             if let Ok(text) = msg.to_str() {
                 if let Ok(message) = serde_json::from_str::<Message>(text) {
                     match &message {
                         Message::JoinNetwork { network_id } => {
+                            // Remove from current network if exists
                             if let Some(old_network) = &current_network {
                                 let mut networks_lock = networks.write().await;
                                 if let Some(network_peers) = networks_lock.get_mut(old_network) {
@@ -181,6 +197,7 @@ async fn handle_peer(ws: WebSocket, networks: Networks, global_peers: GlobalPeer
                                 }
                             }
                             
+                            // Add to new network
                             let network_peer = NetworkPeer {
                                 peer_id: peer_id.clone(),
                                 network_id: network_id.clone(),
@@ -198,10 +215,12 @@ async fn handle_peer(ws: WebSocket, networks: Networks, global_peers: GlobalPeer
                             
                             current_network = Some(network_id.clone());
                             
+                            // Send peer list for this network
                             let peer_list = get_network_peers(&networks, network_id, &peer_id).await;
                             let _ = send_network_info(&networks, &peer_id, network_id).await;
                             let _ = send_to_peer_direct(&tx, Message::Peers { peers: peer_list }).await;
                             
+                            // Broadcast network list update to all connected peers
                             broadcast_network_list_update(&networks, &global_peers).await;
                             
                             println!("Peer {} joined network: {}", &peer_id[..8], network_id);
@@ -219,7 +238,7 @@ async fn handle_peer(ws: WebSocket, networks: Networks, global_peers: GlobalPeer
         }
     }
     
-    // Cleanup
+    // Clean up
     global_peers.write().await.remove(&peer_id);
     
     if let Some(network_id) = current_network {
@@ -233,12 +252,14 @@ async fn handle_peer(ws: WebSocket, networks: Networks, global_peers: GlobalPeer
         }
         drop(networks_lock);
         
+        // Broadcast network list update to remaining peers
         broadcast_network_list_update(&networks, &global_peers).await;
     }
     
     println!("Peer {} disconnected", &peer_id[..8]);
 }
 
+// Helper functions (same logic as before but using common types)
 async fn get_networks_info(networks: Networks) -> Result<impl warp::Reply, warp::Rejection> {
     let networks_lock = networks.read().await;
     let mut info = HashMap::new();
@@ -267,6 +288,7 @@ async fn get_network_list(networks: Networks) -> Result<impl warp::Reply, warp::
     Ok(warp::reply::json(&network_list))
 }
 
+// Additional helper functions
 async fn get_network_peers(networks: &Networks, network_id: &str, exclude_peer: &str) -> Vec<String> {
     let networks_lock = networks.read().await;
     if let Some(network_peers) = networks_lock.get(network_id) {

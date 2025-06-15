@@ -1,8 +1,8 @@
-// Tracker module - WebRTC peer discovery and multi-tenant networks
+// Tracker module - uses enterprise types throughout
 pub mod server;
 pub mod integration;
 
-// Re-export main types with proper names
+// Re-export main types
 pub use server::Tracker;
 pub use integration::EnterpriseIntegration;
-pub use integration::BlockchainUpdate;
+// Note: Using TenantBlockchainUpdate from enterprise_bc module everywhere

@@ -782,86 +782,79 @@
             }
             
             // CORRECTED: Send BlockchainUpdate format matching Rust structs
-	//
-		// FIXED: Send TenantBlockchainUpdate format matching enterprise types
-async sendBlockchainUpdate() {
-    if (!this.connected || !this.currentNetwork) {
-        log('Cannot sync: not connected to network');
-        return false;
-    }
-
-    const now = Date.now();
-    if (now - this.lastSyncTime < 2000) {
-        return false;
-    }
-    this.lastSyncTime = now;
-
-    if (!this.peerId) {
-        this.peerId = 'web-client-' + Math.random().toString(36).substr(2, 9);
-    }
-
-    // Convert browser blockchain to TenantBlockchainUpdate format
-    // This matches the TenantBlockData struct in enterprise_bc/blockchain.rs
-    const newBlocks = blockchain.chain.slice(-5).map(block => ({
-        block_id: block.id,
-        block_hash: block.hash,
-        transactions: block.data === "Genesis Block" ? [] :
-                     block.data.includes(',') ? block.data.split(',').map(s => s.trim()) : [block.data],
-        timestamp: Math.floor(block.timestamp / 1000), // Convert to seconds
-        previous_hash: block.prev_hash || "0"
-    }));
-
-    // This matches TenantBlockchainUpdate struct in enterprise_bc/blockchain.rs
-    const update = {
-        network_id: this.currentNetwork,
-        peer_id: this.peerId,
-        new_blocks: newBlocks,                         // Array of TenantBlockData
-        timestamp: Math.floor(Date.now() / 1000)
-    };
-
-    try {
-        const response = await fetch(`http://${this.serverUrl}/api/blockchain-update`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(update)
-        });
-
-        if (response.ok) {
-            const result = await response.json();
-            log('Blockchain synced with enterprise BC!');
-            log(`Sent: ${newBlocks.length} blocks`);
-
-            // Update sync tracking
-            const beforeSync = blockchain.getLastSyncBlock();
-            blockchain.setLastSyncBlock(blockchain.chain[blockchain.chain.length - 1].id);
-            const afterSync = blockchain.getLastSyncBlock();
-
-            log(`Sync tracking updated: ${beforeSync} → ${afterSync}`);
-
-            // Log transaction details
-            const nonGenesisBlocks = newBlocks.filter(block => block.transactions.length > 0);
-            if (nonGenesisBlocks.length > 0) {
-                log(`Transactions: ${nonGenesisBlocks.map(b => `Block #${b.block_id}: ${b.transactions.join(', ')}`).join(' | ')}`);
+            async sendBlockchainUpdate() {
+                if (!this.connected || !this.currentNetwork) {
+                    log('Cannot sync: not connected to network');
+                    return false;
+                }
+                
+                const now = Date.now();
+                if (now - this.lastSyncTime < 2000) {
+                    return false;
+                }
+                this.lastSyncTime = now;
+                
+                if (!this.peerId) {
+                    this.peerId = 'web-client-' + Math.random().toString(36).substr(2, 9);
+                }
+                
+                // Convert browser blockchain to BlockchainUpdate format
+                // This matches the BlockData struct in tracker/integration.rs
+                const newBlocks = blockchain.chain.slice(-5).map(block => ({
+                    id: block.id,
+                    hash: block.hash,
+                    data: block.data,                              // Keep as string (not array)
+                    timestamp: Math.floor(block.timestamp / 1000), // Convert to seconds
+                    previous_hash: block.prev_hash || "0",         // Handle missing field
+                    nonce: block.nonce || 0                        // Handle missing field
+                }));
+                
+                // This matches BlockchainUpdate struct in tracker/integration.rs
+                const update = {
+                    network_id: this.currentNetwork,
+                    peer_id: this.peerId,
+                    new_blocks: newBlocks,                         // Array of BlockData
+                    timestamp: Math.floor(Date.now() / 1000)
+                };
+                
+                try {
+                    const response = await fetch(`http://${this.serverUrl}/api/blockchain-update`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(update)
+                    });
+                    
+                    if (response.ok) {
+                        const result = await response.json();
+                        log('Blockchain synced with enterprise BC!');
+                        log(`Sent: ${newBlocks.length} blocks`);
+                        
+                        const beforeSync = blockchain.getLastSyncBlock();
+                        blockchain.setLastSyncBlock(blockchain.chain[blockchain.chain.length - 1].id);
+                        const afterSync = blockchain.getLastSyncBlock();
+                        
+                        log(`Sync tracking updated: ${beforeSync} → ${afterSync}`);
+                        
+                        const nonGenesisBlocks = newBlocks.filter(block => block.data !== "Genesis Block");
+                        if (nonGenesisBlocks.length > 0) {
+                            log(`Block content: ${nonGenesisBlocks.map(b => `#${b.id}: "${b.data}"`).join(', ')}`);
+                        }
+                        
+                        showSyncStatus(`Synced: ${newBlocks.length} blocks successfully`, 'success');
+                        updateUI();
+                        return true;
+                    } else {
+                        const errorText = await response.text();
+                        log(`Sync failed: ${response.status} - ${errorText}`);
+                        showSyncStatus(`Sync failed: ${response.status}`, 'error');
+                        return false;
+                    }
+                } catch (error) {
+                    log('Sync error: ' + error.message);
+                    showSyncStatus('Sync error: ' + error.message, 'error');
+                    return false;
+                }
             }
-
-            showSyncStatus(`Synced: ${newBlocks.length} blocks successfully`, 'success');
-            updateUI();
-            return true;
-        } else {
-            const errorText = await response.text();
-            log(`Sync failed: ${response.status} - ${errorText}`);
-            showSyncStatus(`Sync failed: ${response.status}`, 'error');
-            return false;
-        }
-    } catch (error) {
-        log('Sync error: ' + error.message);
-        showSyncStatus('Sync error: ' + error.message, 'error');
-        return false;
-    }
-}
-
-////////
-
         }
 
         // Global instances

@@ -1,0 +1,22 @@
+{
+  "active_validators": [
+    "validator1"
+  ],
+  "chain": [
+    {
+      "hash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "height": 0,
+      "merkle_root": "0000000000000000000000000000000000000000000000000000000000000000",
+      "nonce": 0,
+      "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "timestamp": 1750007647,
+      "transactions": [],
+      "validator": "genesis"
+    }
+  ],
+  "last_validator_heartbeat": {
+    "validator1": 1750008697
+  },
+  "pending_transactions": [],
+  "validator_id": "validator1"
+}
