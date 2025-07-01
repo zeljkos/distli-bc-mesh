@@ -1,3 +1,4 @@
+// Updated src/enterprise_bc/dashboard.rs with debug features
 use warp::Filter;
 use tracing::info;
 
@@ -5,7 +6,7 @@ pub async fn start_dashboard(port: u16) {
     info!("Starting dashboard on port {}", port);
     
     let dashboard_html = warp::path::end()
-        .map(|| warp::reply::html(DASHBOARD_HTML));
+        .map(|| warp::reply::html(ENHANCED_DASHBOARD_HTML));
     
     let static_files = warp::path("static")
         .and(warp::fs::dir("static"));
@@ -17,7 +18,7 @@ pub async fn start_dashboard(port: u16) {
         .await;
 }
 
-const DASHBOARD_HTML: &str = r#"
+const ENHANCED_DASHBOARD_HTML: &str = r#"
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -94,17 +95,31 @@ const DASHBOARD_HTML: &str = r#"
             border-radius: 4px;
             margin: 10px 0;
         }
-        .refresh-btn {
+        .warning {
+            color: #f39c12;
+            background: #fef9e7;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .refresh-btn, .debug-btn {
             background: #3498db;
             color: white;
             border: none;
             padding: 10px 20px;
             border-radius: 4px;
             cursor: pointer;
-            margin-bottom: 20px;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        .debug-btn {
+            background: #e67e22;
         }
         .refresh-btn:hover {
             background: #2980b9;
+        }
+        .debug-btn:hover {
+            background: #d35400;
         }
         .config-panel {
             background: white;
@@ -156,13 +171,24 @@ const DASHBOARD_HTML: &str = r#"
             border-radius: 4px;
             margin: 10px 0;
         }
+        .debug-log {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 10px;
+            border-radius: 4px;
+            height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+            margin-top: 10px;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
             <h1>Enterprise Blockchain Dashboard</h1>
-            <p>Master blockchain for tenant networks - Validator Status</p>
+            <p>Master blockchain for tenant networks - Debug Mode</p>
         </div>
         
         <div class="config-panel">
@@ -178,11 +204,13 @@ const DASHBOARD_HTML: &str = r#"
         </div>
         
         <button class="refresh-btn" onclick="loadDashboard()">Refresh Data</button>
+        <button class="debug-btn" onclick="debugBlocks()">Debug Blocks</button>
+        <button class="debug-btn" onclick="testAllEndpoints()">Test Endpoints</button>
         
         <div class="stats" id="stats">
             <div class="stat-card">
                 <div class="stat-value" id="block-height">-</div>
-                <div class="stat-label">Block Height</div>
+                <div class="stat-label">Tenant Blocks</div>
             </div>
             <div class="stat-card">
                 <div class="stat-value" id="validator-count">-</div>
@@ -194,7 +222,7 @@ const DASHBOARD_HTML: &str = r#"
             </div>
             <div class="stat-card">
                 <div class="stat-value" id="pending-updates">-</div>
-                <div class="stat-label">Pending Transactions</div>
+                <div class="stat-label">Total Transactions</div>
             </div>
         </div>
         
@@ -204,7 +232,8 @@ const DASHBOARD_HTML: &str = r#"
         </div>
         
         <div class="section">
-            <h2>Recent Blocks</h2>
+            <h2>Recent Tenant Blocks</h2>
+            <div id="blocks-debug-info" class="info" style="display: none;"></div>
             <div id="recent-blocks">Loading...</div>
         </div>
         
@@ -212,34 +241,47 @@ const DASHBOARD_HTML: &str = r#"
             <h2>Tenant Summaries</h2>
             <div id="tenant-summaries">Loading...</div>
         </div>
+        
+        <div class="section">
+            <h3>Debug Log</h3>
+            <div id="debug-log" class="debug-log"></div>
+        </div>
     </div>
 
     <script>
         // Configuration
         let API_BASE = '';
-        let errorCount = 0;
+        let debugLog = [];
         
-        // Initialize API URL - works for both manual and Docker deployment
+        function log(message, level = 'INFO') {
+            const timestamp = new Date().toLocaleTimeString();
+            const entry = `[${timestamp}] ${level}: ${message}`;
+            debugLog.push(entry);
+            
+            const logDiv = document.getElementById('debug-log');
+            logDiv.innerHTML = debugLog.slice(-50).join('\n');
+            logDiv.scrollTop = logDiv.scrollHeight;
+            
+            console.log(entry);
+        }
+        
         function initializeApiUrl() {
-            // Default to the host and port 8080 for manual validator
-            // For Docker deployment, this would be changed to the load balancer port
             API_BASE = `http://${window.location.hostname}:8080`;
             document.getElementById('api-url').value = API_BASE;
-            
-            console.log(`Initialized API URL: ${API_BASE}`);
+            log(`Initialized API URL: ${API_BASE}`);
         }
         
         function updateApiUrl() {
             const newUrl = document.getElementById('api-url').value.trim();
             if (newUrl) {
                 API_BASE = newUrl;
-                console.log(`Updated API URL: ${API_BASE}`);
+                log(`Updated API URL: ${API_BASE}`);
                 testConnection();
             }
         }
         
         async function testConnection() {
-            console.log('Testing connection...');
+            log('Testing connection...');
             const statusEl = document.getElementById('connection-status');
             const textEl = document.getElementById('connection-text');
             const detailsEl = document.getElementById('connection-details');
@@ -253,23 +295,22 @@ const DASHBOARD_HTML: &str = r#"
                 if (response.ok) {
                     const data = await response.json();
                     statusEl.className = 'connection-status connected';
-                    textEl.textContent = 'Connected ✅';
+                    textEl.textContent = 'Connected';
                     detailsEl.innerHTML = `<div class="success">Health check passed. Status: ${data.status}</div>`;
-                    console.log('Connection test successful');
+                    log('Connection test successful', 'SUCCESS');
                 } else {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
             } catch (error) {
                 statusEl.className = 'connection-status';
-                textEl.textContent = 'Failed ❌';
+                textEl.textContent = 'Failed';
                 detailsEl.innerHTML = `<div class="error">Error: ${error.message}</div>`;
-                console.log(`Connection test failed: ${error.message}`);
-                errorCount++;
+                log(`Connection test failed: ${error.message}`, 'ERROR');
             }
         }
         
         async function loadDashboard() {
-            console.log('Loading dashboard data...');
+            log('Loading dashboard data...');
             
             try {
                 await Promise.all([
@@ -277,63 +318,64 @@ const DASHBOARD_HTML: &str = r#"
                     loadBlocks(),
                     loadTenants()
                 ]);
-                console.log('Dashboard loaded successfully');
+                log('Dashboard loaded successfully', 'SUCCESS');
             } catch (error) {
-                console.log(`Error loading dashboard: ${error.message}`);
+                log(`Error loading dashboard: ${error.message}`, 'ERROR');
                 showError('Failed to load dashboard data: ' + error.message);
-                errorCount++;
             }
         }
         
         async function loadValidatorStatus() {
             try {
+                log('Fetching validator status...');
                 const response = await fetch(`${API_BASE}/api/status`);
                 if (response.ok) {
                     const status = await response.json();
                     
-                    // Update UI with validator data
                     document.getElementById('block-height').textContent = status.height || 0;
                     document.getElementById('validator-count').textContent = status.active_validators || 1;
-                    document.getElementById('pending-updates').textContent = status.pending_transactions || 0;
+                    document.getElementById('pending-updates').textContent = status.total_transactions || 0;
                     
-                    // Display comprehensive validator status
                     const validatorStatusHtml = `
                         <div class="validator-status">
-                            ✅ Validator Active: ${status.validator}<br>
-                            📊 Height: ${status.height}<br>
-                            📦 Total Blocks: ${status.total_blocks}<br>
-                            🔄 Total Transactions: ${status.total_transactions}<br>
-                            👥 Active Validators: ${status.active_validators}<br>
-                            🏢 Active Tenants: ${status.active_tenants}<br>
-                            ⏰ Smart Contracts Ready: ${status.ready_for_smart_contracts ? 'Yes' : 'No'}<br>
-                            💚 Chain Health: ${status.chain_health || 'healthy'}
+                            Validator Active: ${status.validator}<br>
+                            Tenant Blocks: ${status.height}<br>
+                            Enterprise Blocks: ${status.total_blocks}<br>
+                            Total Transactions: ${status.total_transactions}<br>
+                            Active Validators: ${status.active_validators}<br>
+                            Active Tenants: ${status.active_tenants}<br>
+                            Chain Health: ${status.chain_health || 'healthy'}
                         </div>
                     `;
                     
                     document.getElementById('validator-status-list').innerHTML = validatorStatusHtml;
-                    
-                    console.log(`✅ Validator status loaded: height=${status.height}, validator=${status.validator}`);
+                    log(`Validator status loaded: height=${status.height}, validator=${status.validator}`, 'SUCCESS');
                 } else {
                     throw new Error(`HTTP ${response.status}`);
                 }
             } catch (error) {
-                console.log(`Error loading validator status: ${error.message}`);
+                log(`Error loading validator status: ${error.message}`, 'ERROR');
                 document.getElementById('validator-status-list').innerHTML = 
-                    `<div class="error">❌ Failed to load validator status: ${error.message}</div>`;
+                    `<div class="error">Failed to load validator status: ${error.message}</div>`;
                 throw error;
             }
         }
         
         async function loadBlocks() {
             try {
-                const response = await fetch(`${API_BASE}/api/blocks?limit=5`);
+                log('Fetching tenant blocks...');
+                const response = await fetch(`${API_BASE}/api/blocks?limit=10`);
                 const blocks = await response.json();
                 
                 const container = document.getElementById('recent-blocks');
                 container.innerHTML = '';
                 
+                log(`Received response with ${blocks.length} blocks`);
+                
                 if (!blocks || blocks.length === 0) {
-                    container.innerHTML = '<div class="info">No blocks yet - waiting for tenant transactions</div>';
+                    container.innerHTML = '<div class="warning">No tenant blocks found - Check data flow</div>';
+                    log('No tenant blocks received', 'WARNING');
+                    showBlocksDebugInfo();
                     return;
                 }
                 
@@ -341,37 +383,32 @@ const DASHBOARD_HTML: &str = r#"
                     const blockDiv = document.createElement('div');
                     blockDiv.className = 'block';
                     
-                    // Enhanced block display with transaction content
-                    let transactionHtml = '';
-                    if (block.transactions && block.transactions.length > 0) {
-                        transactionHtml = `
-                            <div style="margin-top: 8px;">
-                                <strong>Transactions (${block.transactions.length}):</strong><br>
-                                ${block.transactions.map(tx => 
-                                    `<span style="font-size: 12px; color: #666;">• ${tx.tenant_network}: "${tx.transaction_data}" (from ${tx.from_peer})</span>`
-                                ).join('<br>')}
-                            </div>
-                        `;
-                    }
+                    const blockHash = block.block_hash || block.hash || 'N/A';
+                    const previousHash = block.previous_hash || 'N/A';
+                    const transactions = block.transactions || [];
                     
                     blockDiv.innerHTML = `
                         <div style="font-weight: bold; margin-bottom: 5px;">
-                            Block #${block.height} - Validated by ${block.validator}
+                            Tenant Block #${block.block_id || block.id || '0'} - Network: ${block.network_id || 'Unknown'}
                         </div>
-                        <div>Hash: ${block.hash.substring(0, 16)}...</div>
-                        <div>Previous: ${block.previous_hash.substring(0, 16)}...</div>
-                        <div>Timestamp: ${new Date(block.timestamp * 1000).toLocaleString()}</div>
-                        <div>Transaction Count: ${block.transaction_count}</div>
-                        <div>Merkle Root: ${block.merkle_root.substring(0, 16)}...</div>
-                        <div>Nonce: ${block.nonce}</div>
-                        ${transactionHtml}
+                        <div>Hash: ${blockHash.length > 16 ? blockHash.substring(0, 16) + '...' : blockHash}</div>
+                        <div>Previous: ${previousHash.length > 16 ? previousHash.substring(0, 16) + '...' : previousHash}</div>
+                        <div>Timestamp: ${new Date((block.timestamp || 0) * 1000).toLocaleString()}</div>
+                        <div>Transactions: ${transactions.length}</div>
+                        <div>From Peer: ${block.from_peer || 'Unknown'}</div>
+                        ${transactions.length > 0 ? `
+                            <div style="margin-top: 8px;">
+                                <strong>Transaction Data:</strong><br>
+                                ${transactions.map(tx => `<span style="font-size: 12px; color: #666;">• ${tx}</span>`).join('<br>')}
+                            </div>
+                        ` : ''}
                     `;
                     container.appendChild(blockDiv);
                 });
                 
-                console.log(`Loaded ${blocks.length} blocks`);
+                log(`Loaded ${blocks.length} tenant blocks`, 'SUCCESS');
             } catch (error) {
-                console.error('Error loading blocks:', error);
+                log(`Error loading blocks: ${error.message}`, 'ERROR');
                 document.getElementById('recent-blocks').innerHTML = 
                     `<div class="error">Failed to load blocks: ${error.message}</div>`;
             }
@@ -379,6 +416,7 @@ const DASHBOARD_HTML: &str = r#"
         
         async function loadTenants() {
             try {
+                log('Fetching tenant summaries...');
                 const response = await fetch(`${API_BASE}/api/tenants`);
                 
                 if (!response.ok) {
@@ -389,11 +427,11 @@ const DASHBOARD_HTML: &str = r#"
                 const container = document.getElementById('tenant-summaries');
                 container.innerHTML = '';
 
-                // Update tenant count in stats
                 document.getElementById('tenant-count').textContent = data.total_tenants || 0;
 
                 if (!data.tenants || data.tenants.length === 0) {
                     container.innerHTML = '<div class="info">No active tenants - connect browser clients and create transactions</div>';
+                    log('No tenant summaries found', 'WARNING');
                     return;
                 }
 
@@ -401,7 +439,6 @@ const DASHBOARD_HTML: &str = r#"
                     const tenantDiv = document.createElement('div');
                     tenantDiv.className = 'tenant-summary';
 
-                    // Enhanced display with actual block content
                     let recentMessagesHtml = '';
                     if (tenant.recent_messages && tenant.recent_messages.length > 0) {
                         recentMessagesHtml = `
@@ -415,23 +452,80 @@ const DASHBOARD_HTML: &str = r#"
                     }
 
                     tenantDiv.innerHTML = `
-                        <div><strong>🏢 ${tenant.tenant_id}</strong></div>
-                        <div>📊 Blocks: ${tenant.block_count} | Transactions: ${tenant.transaction_count}</div>
-                        <div>⏰ Last Activity: ${new Date(tenant.last_activity * 1000).toLocaleString()}</div>
+                        <div><strong>${tenant.tenant_id}</strong></div>
+                        <div>Blocks: ${tenant.block_count} | Transactions: ${tenant.transaction_count}</div>
+                        <div>Last Activity: ${new Date(tenant.last_activity * 1000).toLocaleString()}</div>
                         ${recentMessagesHtml}
                     `;
                     container.appendChild(tenantDiv);
                 });
 
-                console.log(`Loaded ${data.tenants.length} tenant summaries`);
+                log(`Loaded ${data.tenants.length} tenant summaries`, 'SUCCESS');
 
             } catch (error) {
-                console.error('Error loading tenants:', error);
+                log(`Error loading tenants: ${error.message}`, 'ERROR');
                 document.getElementById('tenant-summaries').innerHTML = 
                     `<div class="error">Failed to load tenant data: ${error.message}</div>`;
                 
-                // Set tenant count to 0 on error
                 document.getElementById('tenant-count').textContent = 0;
+            }
+        }
+
+        async function debugBlocks() {
+            log('Running blocks debug check...');
+            
+            try {
+                // Test blocks endpoint specifically
+                const response = await fetch(`${API_BASE}/api/blocks?limit=5`);
+                const data = await response.json();
+                
+                log(`Blocks endpoint status: ${response.status}`);
+                log(`Blocks data type: ${Array.isArray(data) ? 'array' : typeof data}`);
+                log(`Blocks count: ${data.length || 0}`);
+                
+                if (data.length === 0) {
+                    log('No blocks found. Checking possible causes...', 'WARNING');
+                    showBlocksDebugInfo();
+                } else {
+                    log(`First block: ${JSON.stringify(data[0], null, 2)}`);
+                }
+                
+                await loadBlocks();
+            } catch (error) {
+                log(`Blocks debug error: ${error.message}`, 'ERROR');
+            }
+        }
+        
+        function showBlocksDebugInfo() {
+            const debugInfo = document.getElementById('blocks-debug-info');
+            debugInfo.style.display = 'block';
+            debugInfo.innerHTML = `
+                <strong>No blocks found. Debug checklist:</strong><br>
+                1. Check if tracker is running and configured with ENTERPRISE_BC_URL<br>
+                2. Verify browser clients are creating transactions and mining blocks<br>
+                3. Check network connectivity between tracker and enterprise BC<br>
+                4. Ensure enterprise validator is receiving updates at /api/tenant-blockchain-update
+            `;
+        }
+        
+        async function testAllEndpoints() {
+            log('Testing all API endpoints...');
+            
+            const endpoints = [
+                { path: '/health', name: 'Health Check' },
+                { path: '/api/status', name: 'Status' },
+                { path: '/api/blocks?limit=1', name: 'Blocks' },
+                { path: '/api/tenants', name: 'Tenants' }
+            ];
+            
+            for (const endpoint of endpoints) {
+                try {
+                    const response = await fetch(`${API_BASE}${endpoint.path}`);
+                    const status = response.ok ? 'OK' : 'FAILED';
+                    log(`${endpoint.name}: HTTP ${response.status} ${status}`, response.ok ? 'SUCCESS' : 'ERROR');
+                } catch (error) {
+                    log(`${endpoint.name}: ERROR - ${error.message}`, 'ERROR');
+                }
             }
         }
 

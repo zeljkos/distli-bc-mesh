@@ -44,6 +44,14 @@ pub enum Message {
     NetworkListUpdate {
         networks: Vec<serde_json::Value>
     },
+    
+    #[serde(rename = "blockchain_update")]
+    BlockchainUpdate {
+        network_id: String,
+        peer_id: String,
+        new_blocks: Vec<serde_json::Value>,
+        timestamp: u64,
+    },
 }
 
 #[derive(Debug, Clone)]

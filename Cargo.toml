@@ -1,6 +1,6 @@
 [package]
 name = "distli-mesh-bc"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 
 [[bin]]
@@ -14,6 +14,10 @@ path = "src/enterprise_bc/validator_main.rs"
 [[bin]]
 name = "enterprise-dashboard"
 path = "src/enterprise_bc/dashboard_main.rs"
+
+[[example]]
+name = "trading_test"
+path = "examples/trading_test.rs"
 
 [dependencies]
 tokio = { version = "1.0", features = ["full"] }

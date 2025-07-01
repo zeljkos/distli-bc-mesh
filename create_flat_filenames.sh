@@ -82,8 +82,8 @@ for file in Cargo.toml README.md LICENSE CHANGELOG.md .gitignore package.json ts
     if [ -f "$file" ]; then
         # For root files, just prefix with "root-"
         new_filename="root-$file"
-        if cp "$file" "$OUTPUT_DIR/$new_filename"; then
-            echo "  ✅ $file → $new_filename"
+        if cp "$file" "$OUTPUT_DIR/$file"; then
+            echo "  ✅ $file → $file"
         else
             echo "  ❌ Failed to copy $file"
         fi

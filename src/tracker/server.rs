@@ -2,7 +2,7 @@
 use crate::common::types::{Message, NetworkPeer};
 use crate::common::api_utils;
 use crate::tracker::integration::EnterpriseIntegration;
-use crate::enterprise_bc::TenantBlockchainUpdate; // Use enterprise type
+use crate::enterprise_bc::{TenantBlockchainUpdate, TenantBlockData}; // Use enterprise type
 use futures_util::{SinkExt, StreamExt};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -48,9 +48,14 @@ impl Tracker {
         
         let ws_route = warp::path("ws")
             .and(warp::ws())
-            .and(warp::any().map(move || (networks.clone(), global_peers.clone())))
-            .map(|ws: warp::ws::Ws, (networks, global_peers)| {
-                ws.on_upgrade(move |socket| handle_peer(socket, networks, global_peers))
+            .and(warp::any().map({
+                let networks = networks.clone();
+                let global_peers = global_peers.clone();
+                let integration = integration.clone();
+                move || (networks.clone(), global_peers.clone(), integration.clone())
+            }))
+            .map(|ws: warp::ws::Ws, (networks, global_peers, integration)| {
+                ws.on_upgrade(move |socket| handle_peer(socket, networks, global_peers, integration))
             });
 
         // Use enterprise format throughout
@@ -58,7 +63,10 @@ impl Tracker {
             .and(warp::path("blockchain-update"))
             .and(warp::post())
             .and(warp::body::json())
-            .and(warp::any().map(move || integration.clone()))
+            .and(warp::any().map({
+                let integration = integration.clone();
+                move || integration.clone()
+            }))
             .and_then(handle_blockchain_update);
 
         let networks_for_api = self.networks.clone();
@@ -142,7 +150,7 @@ async fn handle_blockchain_update(
 }
 
 // Helper functions remain the same
-async fn handle_peer(ws: WebSocket, networks: Networks, global_peers: GlobalPeers) {
+async fn handle_peer(ws: WebSocket, networks: Networks, global_peers: GlobalPeers, integration: SharedIntegration) {
     let peer_id = Uuid::new_v4().to_string();
     let (mut peer_ws_tx, mut peer_ws_rx) = ws.split();
     let (tx, rx) = mpsc::unbounded_channel();
@@ -205,6 +213,44 @@ async fn handle_peer(ws: WebSocket, networks: Networks, global_peers: GlobalPeer
                             broadcast_network_list_update(&networks, &global_peers).await;
                             
                             println!("Peer {} joined network: {}", &peer_id[..8], network_id);
+                        }
+                        Message::BlockchainUpdate { network_id, peer_id: update_peer_id, new_blocks, timestamp } => {
+                            println!("Received blockchain update from {}: {} blocks", network_id, new_blocks.len());
+                            
+                            // Convert to TenantBlockchainUpdate format
+                            let tenant_blocks: Vec<TenantBlockData> = new_blocks.iter()
+                                .filter_map(|block| {
+                                    Some(TenantBlockData {
+                                        block_id: block["block_id"].as_u64()?,
+                                        block_hash: block["block_hash"].as_str()?.to_string(),
+                                        transactions: block["transactions"].as_array()?
+                                            .iter()
+                                            .filter_map(|tx| tx.as_str().map(|s| s.to_string()))
+                                            .collect(),
+                                        timestamp: block["timestamp"].as_u64()?,
+                                        previous_hash: block["previous_hash"].as_str().unwrap_or("").to_string(),
+                                    })
+                                })
+                                .collect();
+                            
+                            let update = TenantBlockchainUpdate {
+                                network_id: network_id.clone(),
+                                peer_id: update_peer_id.clone(),
+                                new_blocks: tenant_blocks,
+                                timestamp: *timestamp,
+                            };
+                            
+                            // Forward to enterprise blockchain
+                            let integration_clone = integration.clone();
+                            tokio::spawn(async move {
+                                let mut int_lock = integration_clone.write().await;
+                                if let Some(ref mut integration_instance) = int_lock.as_mut() {
+                                    integration_instance.update_network_blockchain_state_with_update(&update).await;
+                                    println!("Blockchain data forwarded to enterprise BC from peer!");
+                                } else {
+                                    println!("No enterprise integration configured");
+                                }
+                            });
                         }
                         _ => {
                             if let Some(network_id) = &current_network {

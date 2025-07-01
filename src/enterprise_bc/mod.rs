@@ -12,7 +12,8 @@ pub use blockchain::{
     EnterpriseBlockchain, 
     EnterpriseTransaction,
     TenantBlockchainUpdate,
-    TenantBlockData
+    TenantBlockData,
+    TenantBlock
 };
 pub use validator::Validator;
 pub use consensus::ConsensusEngine;

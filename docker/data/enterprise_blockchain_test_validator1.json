@@ -1,0 +1,193 @@
+{
+  "active_validators": [
+    "test_validator1"
+  ],
+  "chain": [
+    {
+      "hash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "height": 0,
+      "merkle_root": "0000000000000000000000000000000000000000000000000000000000000000",
+      "nonce": 0,
+      "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "timestamp": 1750056523,
+      "transactions": [],
+      "validator": "genesis"
+    }
+  ],
+  "last_validator_heartbeat": {
+    "test_validator1": 1751290569
+  },
+  "pending_transactions": [],
+  "tenant_blocks": [
+    {
+      "block_hash": "000genesis",
+      "block_id": 0,
+      "from_peer": "web-client-9t7taydai",
+      "network_id": "abcd",
+      "previous_hash": "0",
+      "timestamp": 1750056556,
+      "transactions": []
+    },
+    {
+      "block_hash": "0001750056610196",
+      "block_id": 1,
+      "from_peer": "web-client-9t7taydai",
+      "network_id": "abcd",
+      "previous_hash": "000genesis",
+      "timestamp": 1750056610,
+      "transactions": [
+        "test test"
+      ]
+    },
+    {
+      "block_hash": "000genesis",
+      "block_id": 0,
+      "from_peer": "web-client-9t7taydai",
+      "network_id": "12345",
+      "previous_hash": "0",
+      "timestamp": 1750056556,
+      "transactions": []
+    },
+    {
+      "block_hash": "0001750056610196",
+      "block_id": 1,
+      "from_peer": "web-client-9t7taydai",
+      "network_id": "12345",
+      "previous_hash": "000genesis",
+      "timestamp": 1750056610,
+      "transactions": [
+        "test test"
+      ]
+    },
+    {
+      "block_hash": "0001750059228990",
+      "block_id": 2,
+      "from_peer": "web-client-j0bbvucmg",
+      "network_id": "12345",
+      "previous_hash": "0001750056610196",
+      "timestamp": 1750059228,
+      "transactions": [
+        "bljak"
+      ]
+    },
+    {
+      "block_hash": "0001750059293715",
+      "block_id": 3,
+      "from_peer": "web-client-j0bbvucmg",
+      "network_id": "12345",
+      "previous_hash": "0001750059228990",
+      "timestamp": 1750059293,
+      "transactions": [
+        "bljak offline"
+      ]
+    },
+    {
+      "block_hash": "000genesis",
+      "block_id": 0,
+      "from_peer": "web-client-cu30wd0wd",
+      "network_id": "tenant_distli_A",
+      "previous_hash": "0",
+      "timestamp": 1750059678,
+      "transactions": []
+    },
+    {
+      "block_hash": "0001750059792877",
+      "block_id": 1,
+      "from_peer": "web-client-cu30wd0wd",
+      "network_id": "tenant_distli_A",
+      "previous_hash": "000genesis",
+      "timestamp": 1750059792,
+      "transactions": [
+        "caffe oscar"
+      ]
+    },
+    {
+      "block_hash": "0001750059918000",
+      "block_id": 2,
+      "from_peer": "web-client-cu30wd0wd",
+      "network_id": "tenant_distli_A",
+      "previous_hash": "0001750059792877",
+      "timestamp": 1750059918,
+      "transactions": [
+        "caffe oscar offline"
+      ]
+    },
+    {
+      "block_hash": "0001750059951238",
+      "block_id": 3,
+      "from_peer": "web-client-cu30wd0wd",
+      "network_id": "tenant_distli_A",
+      "previous_hash": "0001750059918000",
+      "timestamp": 1750059951,
+      "transactions": [
+        "caffe oscar offline",
+        "caffe oscar offline 2"
+      ]
+    },
+    {
+      "block_hash": "000genesis",
+      "block_id": 0,
+      "from_peer": "web-client-culb855pa",
+      "network_id": "tenant_12345",
+      "previous_hash": "0",
+      "timestamp": 1750063953,
+      "transactions": []
+    },
+    {
+      "block_hash": "0001750064022630",
+      "block_id": 1,
+      "from_peer": "web-client-culb855pa",
+      "network_id": "tenant_12345",
+      "previous_hash": "000genesis",
+      "timestamp": 1750064022,
+      "transactions": [
+        "hello from safari"
+      ]
+    },
+    {
+      "block_hash": "0001750064054902",
+      "block_id": 2,
+      "from_peer": "web-client-culb855pa",
+      "network_id": "tenant_12345",
+      "previous_hash": "0001750064022630",
+      "timestamp": 1750064054,
+      "transactions": [
+        "hello from safari",
+        "hello from brave"
+      ]
+    },
+    {
+      "block_hash": "000genesis",
+      "block_id": 0,
+      "from_peer": "web-client-gtg6q1315",
+      "network_id": "ado_123",
+      "previous_hash": "0",
+      "timestamp": 1750070759,
+      "transactions": []
+    },
+    {
+      "block_hash": "0001750070796933",
+      "block_id": 1,
+      "from_peer": "web-client-gtg6q1315",
+      "network_id": "ado_123",
+      "previous_hash": "000genesis",
+      "timestamp": 1750070796,
+      "transactions": [
+        "ciao iz tajlandskog restorana"
+      ]
+    },
+    {
+      "block_hash": "0001750070872328",
+      "block_id": 2,
+      "from_peer": "web-client-hqsu0e5o4",
+      "network_id": "ado_123",
+      "previous_hash": "0001750070796933",
+      "timestamp": 1750070872,
+      "transactions": [
+        "ciao iz tajlandskog restorana",
+        "offline message"
+      ]
+    }
+  ],
+  "validator_id": "test_validator1"
+}

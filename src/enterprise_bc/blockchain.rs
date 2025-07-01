@@ -1,10 +1,9 @@
-// Simplified blockchain implementation - guaranteed compilation
+// Updated enterprise blockchain - stores tenant blocks directly
 use crate::common::{crypto::hash_data, time::current_timestamp};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
 
-// All types must be public for export
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EnterpriseBlock {
     pub height: u64,
@@ -31,10 +30,23 @@ pub struct EnterpriseTransaction {
     pub execution_result: Option<String>,
 }
 
+// Simple tenant block storage
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TenantBlock {
+    pub network_id: String,
+    pub block_id: u64,
+    pub block_hash: String,
+    pub transactions: Vec<String>,
+    pub timestamp: u64,
+    pub previous_hash: String,
+    pub from_peer: String,
+}
+
 #[derive(Debug, Clone)]
 pub struct EnterpriseBlockchain {
     pub chain: Vec<EnterpriseBlock>,
     pub pending_transactions: Vec<EnterpriseTransaction>,
+    pub tenant_blocks: Vec<TenantBlock>, // NEW: Store tenant blocks directly
     pub validator_id: String,
     pub active_validators: std::collections::HashSet<String>,
     pub last_validator_heartbeat: std::collections::HashMap<String, u64>,
@@ -64,6 +76,7 @@ impl EnterpriseBlockchain {
         let mut blockchain = EnterpriseBlockchain {
             chain: Vec::new(),
             pending_transactions: Vec::new(),
+            tenant_blocks: Vec::new(), // NEW
             validator_id: validator_id.clone(),
             active_validators: std::collections::HashSet::new(),
             last_validator_heartbeat: std::collections::HashMap::new(),
@@ -95,6 +108,92 @@ impl EnterpriseBlockchain {
         }
     }
 
+    // NEW: Store tenant block directly (like full blockchain copy)
+    pub fn add_tenant_block_directly(
+        &mut self,
+        network_id: &str,
+        block_id: u64,
+        block_hash: &str,
+        transactions: &[String],
+        timestamp: u64,
+        previous_hash: &str,
+        from_peer: &str
+    ) {
+        // Check if we already have this block
+        let exists = self.tenant_blocks.iter().any(|b| 
+            b.network_id == network_id && b.block_id == block_id
+        );
+        
+        if !exists {
+            let tenant_block = TenantBlock {
+                network_id: network_id.to_string(),
+                block_id,
+                block_hash: block_hash.to_string(),
+                transactions: transactions.to_vec(),
+                timestamp,
+                previous_hash: previous_hash.to_string(),
+                from_peer: from_peer.to_string(),
+            };
+            
+            self.tenant_blocks.push(tenant_block);
+            self.save_to_disk();
+        }
+    }
+
+    // NEW: Get recent tenant blocks for display
+    pub fn get_recent_tenant_blocks(&self, limit: usize) -> Vec<serde_json::Value> {
+        let start_idx = if self.tenant_blocks.len() > limit {
+            self.tenant_blocks.len() - limit
+        } else {
+            0
+        };
+
+        self.tenant_blocks[start_idx..].iter().map(|block| {
+            serde_json::json!({
+                "network_id": block.network_id,
+                "block_id": block.block_id,
+                "block_hash": block.block_hash,
+                "transactions": block.transactions,
+                "timestamp": block.timestamp,
+                "previous_hash": block.previous_hash,
+                "from_peer": block.from_peer
+            })
+        }).collect()
+    }
+
+    // NEW: Get tenant summaries from stored blocks
+    pub fn get_tenant_summaries(&self) -> Vec<serde_json::Value> {
+        let mut tenant_stats: std::collections::HashMap<String, (usize, usize, u64, Vec<String>)> = std::collections::HashMap::new();
+        
+        for block in &self.tenant_blocks {
+            let entry = tenant_stats.entry(block.network_id.clone())
+                .or_insert((0, 0, 0, Vec::new()));
+            
+            entry.0 += 1; // block count
+            entry.1 += block.transactions.len(); // transaction count
+            entry.2 = entry.2.max(block.timestamp); // last activity
+            
+            // Add recent messages
+            for tx in &block.transactions {
+                entry.3.push(format!("Block #{}: {}", block.block_id, tx));
+                if entry.3.len() > 3 {
+                    entry.3.remove(0);
+                }
+            }
+        }
+        
+        tenant_stats.into_iter().map(|(network_id, (blocks, txs, last_activity, messages))| {
+            serde_json::json!({
+                "tenant_id": network_id,
+                "block_count": blocks,
+                "transaction_count": txs,
+                "last_activity": last_activity,
+                "recent_messages": messages
+            })
+        }).collect()
+    }
+
+    // Keep existing methods for backward compatibility
     pub fn add_tenant_transactions(&mut self, update: TenantBlockchainUpdate) {
         for block in update.new_blocks {
             for (tx_index, tx_data) in block.transactions.iter().enumerate() {
@@ -122,7 +221,11 @@ impl EnterpriseBlockchain {
             return None;
         }
 
-        let last_block = self.chain.last().unwrap();
+        let last_block = match self.chain.last() {
+            Some(block) => block,
+            None => return None,
+        };
+        
         let transactions = self.pending_transactions.clone();
         
         let mut new_block = EnterpriseBlock {
@@ -187,7 +290,10 @@ impl EnterpriseBlockchain {
     }
 
     fn validate_block(&self, block: &EnterpriseBlock) -> bool {
-        let last_block = self.chain.last().unwrap();
+        let last_block = match self.chain.last() {
+            Some(block) => block,
+            None => return false,
+        };
         
         if block.height != last_block.height + 1 {
             return false;
@@ -208,55 +314,23 @@ impl EnterpriseBlockchain {
         true
     }
 
-    pub fn get_all_transactions(&self) -> Vec<&EnterpriseTransaction> {
-        self.chain.iter()
-            .flat_map(|block| block.transactions.iter())
-            .collect()
-    }
-
-    pub fn get_transactions_by_network(&self, network_id: &str) -> Vec<&EnterpriseTransaction> {
-        self.get_all_transactions()
-            .into_iter()
-            .filter(|tx| tx.tenant_network == network_id)
-            .collect()
-    }
-
-    pub fn execute_smart_contract(&mut self, tx: &mut EnterpriseTransaction, _contract_code: &str) -> Result<String, String> {
-        tx.gas_used = Some(100);
-        tx.execution_result = Some("Success".to_string());
-        Ok("Contract executed successfully".to_string())
-    }
-
-    pub fn get_latest_block(&self) -> &EnterpriseBlock {
-        self.chain.last().unwrap()
-    }
-
     pub fn get_blockchain_info(&self) -> serde_json::Value {
-        let latest = self.get_latest_block();
-        let total_transactions: usize = self.chain.iter()
+        let total_transactions: usize = self.tenant_blocks.iter()
             .map(|block| block.transactions.len())
             .sum();
         
-        let mut tenant_networks = std::collections::HashSet::new();
-        for block in &self.chain {
-            for tx in &block.transactions {
-                tenant_networks.insert(tx.tenant_network.clone());
-            }
-        }
+        let tenant_networks: std::collections::HashSet<String> = self.tenant_blocks.iter()
+            .map(|block| block.network_id.clone())
+            .collect();
         
         serde_json::json!({
-            "height": latest.height,
-            "latest_hash": latest.hash,
+            "height": self.tenant_blocks.len(),
             "validator": self.validator_id,
-            "pending_transactions": self.pending_transactions.len(),
-            "total_blocks": self.chain.len(),
+            "total_blocks": self.tenant_blocks.len(),
             "total_transactions": total_transactions,
-            "active_validators": self.active_validators.len(),
+            "active_validators": 1,
             "active_tenants": tenant_networks.len(),
-            "ready_for_smart_contracts": true,
             "chain_health": "healthy",
-            "uptime": "active",
-            "latest_block_time": latest.timestamp,
             "validator_status": "online"
         })
     }
@@ -265,6 +339,7 @@ impl EnterpriseBlockchain {
         let data = serde_json::json!({
             "chain": self.chain,
             "pending_transactions": self.pending_transactions,
+            "tenant_blocks": self.tenant_blocks, // NEW
             "validator_id": self.validator_id,
             "active_validators": self.active_validators.iter().cloned().collect::<Vec<_>>(),
             "last_validator_heartbeat": self.last_validator_heartbeat,
@@ -287,6 +362,9 @@ impl EnterpriseBlockchain {
                     }
                     if let Ok(pending) = serde_json::from_value(data["pending_transactions"].clone()) {
                         self.pending_transactions = pending;
+                    }
+                    if let Ok(tenant_blocks) = serde_json::from_value(data["tenant_blocks"].clone()) {
+                        self.tenant_blocks = tenant_blocks; // NEW
                     }
                     if let Ok(validators) = serde_json::from_value::<Vec<String>>(data["active_validators"].clone()) {
                         self.active_validators = validators.into_iter().collect();
