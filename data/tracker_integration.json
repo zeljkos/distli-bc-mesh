@@ -1,0 +1,53 @@
+{
+  "last_reported_state": {
+    "NET_AB": {
+      "last_reported_block_id": 1,
+      "last_update": 1751488558
+    },
+    "NET_BA": {
+      "last_reported_block_id": 2,
+      "last_update": 1751488521
+    }
+  },
+  "network_blockchain_state": {
+    "NET_AB": {
+      "blocks": [
+        {
+          "block_hash": "0001751488558561",
+          "block_id": 1,
+          "previous_hash": "000genesis",
+          "timestamp": 1751488558,
+          "transactions": [
+            "buy: {\"asset\":\"BTC\",\"quantity\":50,\"price\":1000}"
+          ]
+        }
+      ],
+      "last_block_id": 1,
+      "last_update": 1751488558
+    },
+    "NET_BA": {
+      "blocks": [
+        {
+          "block_hash": "0001751488458473",
+          "block_id": 1,
+          "previous_hash": "000genesis",
+          "timestamp": 1751488458,
+          "transactions": [
+            "buy: {\"asset\":\"BTC\",\"quantity\":100,\"price\":1000}"
+          ]
+        },
+        {
+          "block_hash": "0001751488521088",
+          "block_id": 2,
+          "previous_hash": "0001751488458473",
+          "timestamp": 1751488521,
+          "transactions": [
+            "sell: {\"asset\":\"BTC\",\"quantity\":1000,\"price\":1000}"
+          ]
+        }
+      ],
+      "last_block_id": 2,
+      "last_update": 1751488521
+    }
+  }
+}

@@ -52,6 +52,23 @@ pub enum Message {
         new_blocks: Vec<serde_json::Value>,
         timestamp: u64,
     },
+    #[serde(rename = "cross_network_trade")]
+    CrossNetworkTrade {
+        trade_id: String,
+        buyer_network: String,
+        seller_network: String,
+        asset: String,
+        quantity: f64,
+        price: f64,
+        buyer_order_id: u64,
+        seller_order_id: u64,
+        timestamp: u64,
+    },
+
+    #[serde(rename = "order_book_sync")]
+    OrderBookSync {
+        orders: Vec<serde_json::Value>,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -81,4 +98,17 @@ pub struct NetworkStats {
     pub block_count: u64,
     pub transaction_count: u64,
     pub last_activity: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CrossNetworkTradeNotification {
+    pub trade_id: String,
+    pub buyer_network: String,
+    pub seller_network: String,
+    pub asset: String,
+    pub quantity: f64,
+    pub price: f64,
+    pub buyer_order_id: u64,
+    pub seller_order_id: u64,
+    pub timestamp: u64,
 }

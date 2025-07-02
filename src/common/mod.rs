@@ -5,6 +5,13 @@ pub mod crypto;
 pub mod time;
 pub mod api_utils;
 pub mod contracts; // Add contracts module
+                   //
+ // // Re-export commonly used types
+pub use types::{
+    Message,
+    NetworkPeer,
+    CrossNetworkTradeNotification  // <-- ADD THIS
+};
 
 // Re-export contract types for easy access
 pub use contracts::{

@@ -1,8 +1,8 @@
-// Fixed tracker server - uses enterprise types throughout
+// Simplified tracker - cross-network matching moved to enterprise BC
 use crate::common::types::{Message, NetworkPeer};
 use crate::common::api_utils;
 use crate::tracker::integration::EnterpriseIntegration;
-use crate::enterprise_bc::{TenantBlockchainUpdate, TenantBlockData}; // Use enterprise type
+use crate::enterprise_bc::{TenantBlockchainUpdate, TenantBlockData};
 use futures_util::{SinkExt, StreamExt};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -12,10 +12,25 @@ use uuid::Uuid;
 use warp::ws::{WebSocket, Message as WsMessage};
 use warp::Filter;
 use serde_json::json;
+use serde::{Deserialize, Serialize};
 
 pub type Networks = Arc<RwLock<HashMap<String, HashMap<String, NetworkPeer>>>>;
 type GlobalPeers = Arc<RwLock<HashMap<String, mpsc::UnboundedSender<Result<WsMessage, warp::Error>>>>>;
 pub type SharedIntegration = Arc<RwLock<Option<EnterpriseIntegration>>>;
+
+// NEW: Cross-network trade notification from enterprise BC
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CrossNetworkTradeNotification {
+    pub trade_id: String,
+    pub buyer_network: String,
+    pub seller_network: String,
+    pub asset: String,
+    pub quantity: f64,
+    pub price: f64,
+    pub buyer_order_id: u64,
+    pub seller_order_id: u64,
+    pub timestamp: u64,
+}
 
 pub struct Tracker {
     networks: Networks,
@@ -58,16 +73,30 @@ impl Tracker {
                 ws.on_upgrade(move |socket| handle_peer(socket, networks, global_peers, integration))
             });
 
-        // Use enterprise format throughout
         let blockchain_update_route = warp::path("api")
             .and(warp::path("blockchain-update"))
             .and(warp::post())
-            .and(warp::body::json())
+            .and(warp::body::json::<TenantBlockchainUpdate>())
             .and(warp::any().map({
                 let integration = integration.clone();
                 move || integration.clone()
             }))
-            .and_then(handle_blockchain_update);
+            .and_then(|update: TenantBlockchainUpdate, integration| async move {
+                handle_blockchain_update(update, integration).await
+            });
+
+        // NEW: Cross-network trade notification endpoint
+        let cross_network_trade_route = warp::path("api")
+            .and(warp::path("cross-network-trade"))
+            .and(warp::post())
+            .and(warp::body::json::<CrossNetworkTradeNotification>())
+            .and(warp::any().map({
+                let networks = networks.clone();
+                move || networks.clone()
+            }))
+            .and_then(|notification: CrossNetworkTradeNotification, networks| async move {
+                handle_cross_network_trade_notification(notification, networks).await
+            });
 
         let networks_for_api = self.networks.clone();
         let api_route = warp::path("api")
@@ -91,6 +120,7 @@ impl Tracker {
         
         let routes = ws_route
             .or(blockchain_update_route)
+            .or(cross_network_trade_route) // NEW
             .or(api_route)
             .or(api_list_route)
             .or(health)
@@ -98,14 +128,80 @@ impl Tracker {
             .with(warp::cors().allow_any_origin());
         
         println!("Multi-tenant tracker running on http://0.0.0.0:3030");
+        println!("Cross-network matching handled by enterprise blockchain");
         warp::serve(routes).run(([0, 0, 0, 0], 3030)).await;
     }
 }
 
-// Use enterprise format
+// NEW: Handle cross-network trade notifications from enterprise BC
+async fn handle_cross_network_trade_notification(
+    notification: CrossNetworkTradeNotification,
+    networks: Networks,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    println!("Received cross-network trade notification: {} {} @ {} between {} and {}", 
+             notification.quantity, notification.asset, notification.price,
+             notification.buyer_network, notification.seller_network);
+    
+    // Send notification to both networks involved in the trade
+    let networks_lock = networks.read().await;
+    
+    let mut notified_networks = 0;
+    
+    // Notify buyer network
+    if let Some(buyer_peers) = networks_lock.get(&notification.buyer_network) {
+        let message = Message::CrossNetworkTrade {
+            trade_id: notification.trade_id.clone(),
+            buyer_network: notification.buyer_network.clone(),
+            seller_network: notification.seller_network.clone(),
+            asset: notification.asset.clone(),
+            quantity: notification.quantity,
+            price: notification.price,
+            buyer_order_id: notification.buyer_order_id,
+            seller_order_id: notification.seller_order_id,
+            timestamp: notification.timestamp,
+        };
+        
+        let json = serde_json::to_string(&message).unwrap_or_default();
+        for peer in buyer_peers.values() {
+            let _ = peer.sender.send(Ok(WsMessage::text(json.clone())));
+        }
+        notified_networks += 1;
+        println!("Notified {} peers in buyer network {}", buyer_peers.len(), notification.buyer_network);
+    }
+    
+    // Notify seller network  
+    if let Some(seller_peers) = networks_lock.get(&notification.seller_network) {
+        let message = Message::CrossNetworkTrade {
+            trade_id: notification.trade_id.clone(),
+            buyer_network: notification.buyer_network.clone(),
+            seller_network: notification.seller_network.clone(),
+            asset: notification.asset.clone(),
+            quantity: notification.quantity,
+            price: notification.price,
+            buyer_order_id: notification.buyer_order_id,
+            seller_order_id: notification.seller_order_id,
+            timestamp: notification.timestamp,
+        };
+        
+        let json = serde_json::to_string(&message).unwrap_or_default();
+        for peer in seller_peers.values() {
+            let _ = peer.sender.send(Ok(WsMessage::text(json.clone())));
+        }
+        notified_networks += 1;
+        println!("Notified {} peers in seller network {}", seller_peers.len(), notification.seller_network);
+    }
+    
+    Ok(warp::reply::json(&json!({
+        "status": "success",
+        "message": "Cross-network trade notification sent",
+        "trade_id": notification.trade_id,
+        "notified_networks": notified_networks
+    })))
+}
+
 async fn handle_blockchain_update(
     update: TenantBlockchainUpdate,
-    integration: SharedIntegration
+    integration: SharedIntegration,
 ) -> Result<impl warp::Reply, warp::Rejection> {
     println!("Received blockchain update from {}: {} new blocks", 
              update.network_id, update.new_blocks.len());
@@ -128,12 +224,12 @@ async fn handle_blockchain_update(
         }
     }
     
-    // Forward to enterprise BC
+    // Forward to enterprise BC (where cross-network matching happens)
     {
         let mut int_lock = integration.write().await;
         if let Some(ref mut integration_instance) = int_lock.as_mut() {
             integration_instance.update_network_blockchain_state_with_update(&update).await;
-            println!("Blockchain data forwarded to enterprise BC!");
+            println!("Blockchain data forwarded to enterprise BC for cross-network matching!");
         } else {
             println!("No enterprise integration configured");
         }
@@ -141,16 +237,20 @@ async fn handle_blockchain_update(
     
     Ok(warp::reply::json(&json!({
         "status": "success",
-        "message": "Blockchain update received and processed",
+        "message": "Blockchain update received and forwarded to enterprise BC",
         "network_id": update.network_id,
         "new_blocks": total_blocks,
         "transactions": total_transactions,
-        "immediate_processing": true
+        "cross_network_matching": "enterprise_blockchain"
     })))
 }
 
-// Helper functions remain the same
-async fn handle_peer(ws: WebSocket, networks: Networks, global_peers: GlobalPeers, integration: SharedIntegration) {
+async fn handle_peer(
+    ws: WebSocket, 
+    networks: Networks, 
+    global_peers: GlobalPeers, 
+    integration: SharedIntegration
+) {
     let peer_id = Uuid::new_v4().to_string();
     let (mut peer_ws_tx, mut peer_ws_rx) = ws.split();
     let (tx, rx) = mpsc::unbounded_channel();
@@ -240,13 +340,13 @@ async fn handle_peer(ws: WebSocket, networks: Networks, global_peers: GlobalPeer
                                 timestamp: *timestamp,
                             };
                             
-                            // Forward to enterprise blockchain
+                            // Forward to enterprise blockchain (where cross-network matching happens)
                             let integration_clone = integration.clone();
                             tokio::spawn(async move {
                                 let mut int_lock = integration_clone.write().await;
                                 if let Some(ref mut integration_instance) = int_lock.as_mut() {
                                     integration_instance.update_network_blockchain_state_with_update(&update).await;
-                                    println!("Blockchain data forwarded to enterprise BC from peer!");
+                                    println!("Blockchain data forwarded to enterprise BC for cross-network matching!");
                                 } else {
                                     println!("No enterprise integration configured");
                                 }
@@ -285,6 +385,7 @@ async fn handle_peer(ws: WebSocket, networks: Networks, global_peers: GlobalPeer
     println!("Peer {} disconnected", &peer_id[..8]);
 }
 
+// Rest of the functions remain the same (get_networks_info, get_network_list, etc.)
 async fn get_networks_info(networks: Networks) -> Result<impl warp::Reply, warp::Rejection> {
     let networks_lock = networks.read().await;
     let mut info = HashMap::new();

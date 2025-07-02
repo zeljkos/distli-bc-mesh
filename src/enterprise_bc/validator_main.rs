@@ -22,11 +22,22 @@ async fn main() {
     
     println!("Starting enterprise validator {} on port {}", args.id, args.port);
     
-    let validator = Validator::new(
+    let mut validator = Validator::new(
         args.id,
         args.port,
         get_peer_validators()
     ).await;
+    
+    // Set tracker URL for cross-network trade notifications
+    if let Ok(tracker_url) = env::var("TRACKER_URL") {
+        validator.set_tracker_url(tracker_url.clone()).await;
+        println!("Tracker URL set to: {}", tracker_url);
+    } else {
+        // Default tracker URL
+        let default_tracker = "http://192.168.200.133:3030".to_string();
+        validator.set_tracker_url(default_tracker.clone()).await;
+        println!("Using default tracker URL: {}", default_tracker);
+    }
     
     validator.start().await;
 }

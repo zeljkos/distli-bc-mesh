@@ -1,11 +1,11 @@
-// Enhanced enterprise_bc/api.rs - Simple debugging version
+// Enhanced enterprise_bc/api.rs - Complete version with cross-network trades
 use crate::enterprise_bc::{EnterpriseBlockchain, TenantBlockchainUpdate};
 use crate::common::api_utils;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use warp::Filter;
 use serde_json::json;
-use tracing::{info, warn}; // Removed unused 'error' import
+use tracing::{info, warn};
 
 pub async fn start_api_server(
     port: u16,
@@ -41,6 +41,12 @@ pub async fn start_api_server(
         .and(blockchain_filter.clone())
         .and_then(handle_tenants);
 
+    let cross_network_trades = warp::path("api")
+        .and(warp::path("cross-network-trades"))
+        .and(warp::get())
+        .and(blockchain_filter.clone())
+        .and_then(handle_cross_network_trades);
+
     let health = warp::path("health")
         .and(warp::get())
         .map(|| api_utils::health_check());
@@ -54,10 +60,18 @@ pub async fn start_api_server(
         .or(status)
         .or(blocks)
         .or(tenants)
+        .or(cross_network_trades)
         .or(health)
         .with(cors);
 
     info!("Enterprise API server ready on http://0.0.0.0:{}", port);
+    info!("Available endpoints:");
+    info!("  POST /api/tenant-blockchain-update");
+    info!("  GET  /api/status");
+    info!("  GET  /api/blocks");
+    info!("  GET  /api/tenants");
+    info!("  GET  /api/cross-network-trades");
+    info!("  GET  /health");
     
     warp::serve(routes)
         .run(([0, 0, 0, 0], port))
@@ -83,6 +97,11 @@ async fn handle_tenant_blockchain_update(
     for (i, block) in update.new_blocks.iter().enumerate() {
         info!("Block {}: id={}, transactions={}", i, block.block_id, block.transactions.len());
         transactions_count += block.transactions.len();
+        
+        // Log transaction details
+        for tx in &block.transactions {
+            info!("  Transaction: {}", tx);
+        }
     }
     
     {
@@ -101,18 +120,23 @@ async fn handle_tenant_blockchain_update(
             );
         }
         
+        // NEW: Trigger cross-network matching after storing new blocks
+        info!("Checking for cross-network trading opportunities...");
+        bc.extract_and_match_cross_network_orders();
+        
         info!("Total tenant blocks now: {}", bc.tenant_blocks.len());
     }
     
-    info!("Stored {} blocks with {} transactions from {}", 
+    info!("Stored {} blocks with {} transactions from {} and checked for cross-network matches", 
           blocks_count, transactions_count, update.network_id);
     
     Ok(warp::reply::json(&json!({
         "status": "success",
-        "message": "Tenant blocks stored",
+        "message": "Tenant blocks stored and cross-network matching performed",
         "network_id": update.network_id,
         "blocks_stored": blocks_count,
-        "transactions_stored": transactions_count
+        "transactions_stored": transactions_count,
+        "cross_network_matching": "enabled"
     })))
 }
 
@@ -158,5 +182,21 @@ async fn handle_tenants(
     Ok(warp::reply::json(&json!({
         "tenants": tenants,
         "total_tenants": tenants.len()
+    })))
+}
+
+async fn handle_cross_network_trades(
+    blockchain: Arc<RwLock<EnterpriseBlockchain>>
+) -> Result<impl warp::Reply, warp::Rejection> {
+    info!("Cross-network trades request received");
+    
+    let bc = blockchain.read().await;
+    let trades = bc.get_recent_cross_network_trades();
+    info!("Returning {} cross-network trades", trades.len());
+    
+    Ok(warp::reply::json(&json!({
+        "cross_network_trades": trades,
+        "total_trades": trades.len(),
+        "status": "success"
     })))
 }

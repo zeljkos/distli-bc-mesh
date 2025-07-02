@@ -25,6 +25,12 @@ impl Validator {
         }
     }
     
+    // NEW: Set tracker URL for notifications
+    pub async fn set_tracker_url(&mut self, tracker_url: String) {
+        let mut bc = self.blockchain.write().await;
+        bc.set_tracker_url(tracker_url);
+    }
+    
     pub async fn start(self) {
         info!("Starting validator {} on port {}", self.id, self.port);
         

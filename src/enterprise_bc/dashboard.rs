@@ -236,6 +236,11 @@ const ENHANCED_DASHBOARD_HTML: &str = r#"
             <div id="blocks-debug-info" class="info" style="display: none;"></div>
             <div id="recent-blocks">Loading...</div>
         </div>
+
+        <div class="section">
+            <h2>Cross-Network Trades</h2>
+            <div id="cross-network-trades">Loading...</div>
+        </div>
         
         <div class="section">
             <h2>Tenant Summaries</h2>
@@ -316,7 +321,8 @@ const ENHANCED_DASHBOARD_HTML: &str = r#"
                 await Promise.all([
                     loadValidatorStatus(),
                     loadBlocks(),
-                    loadTenants()
+                    loadTenants(),
+                    loadCrossNetworkTrades()  // Add this line
                 ]);
                 log('Dashboard loaded successfully', 'SUCCESS');
             } catch (error) {
@@ -470,6 +476,94 @@ const ENHANCED_DASHBOARD_HTML: &str = r#"
                 document.getElementById('tenant-count').textContent = 0;
             }
         }
+
+        // Add this JavaScript function to the dashboard (in src/enterprise_bc/dashboard.rs)
+// Find the loadTenants function and add this after it:
+
+async function loadCrossNetworkTrades() {
+    try {
+        log('Fetching cross-network trades...');
+        const response = await fetch(`${API_BASE}/api/cross-network-trades`, {
+            method: 'GET',
+            mode: 'cors'
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        log(`Cross-network trades response: ${JSON.stringify(data)}`);
+
+        const container = document.getElementById('cross-network-trades');
+        container.innerHTML = '';
+
+        if (!data.cross_network_trades || data.cross_network_trades.length === 0) {
+            container.innerHTML = '<div class="info">No cross-network trades executed yet - trades will appear here automatically when orders match across networks</div>';
+            log('No cross-network trades found');
+            return;
+        }
+
+        data.cross_network_trades.forEach((trade, index) => {
+            const tradeDiv = document.createElement('div');
+            tradeDiv.className = 'block';
+            tradeDiv.style.background = '#e8f5e8';
+            tradeDiv.style.borderLeft = '4px solid #28a745';
+            tradeDiv.style.marginBottom = '10px';
+
+            const timestamp = trade.timestamp ? new Date(trade.timestamp * 1000).toLocaleString() : 'Unknown';
+
+            tradeDiv.innerHTML = `
+                <div style="font-weight: bold; margin-bottom: 8px; color: #28a745; font-size: 16px;">
+                    🔄 Cross-Network Trade #${index + 1}
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 14px;">
+                    <div><strong>Asset:</strong> ${trade.asset}</div>
+                    <div><strong>Quantity:</strong> ${trade.quantity}</div>
+                    <div><strong>Price:</strong> ${trade.price}</div>
+                    <div><strong>Enterprise Block:</strong> #${trade.enterprise_block}</div>
+                </div>
+                <div style="margin-top: 8px; font-size: 14px;">
+                    <div><strong>Buyer Network:</strong> <span style="color: #007bff;">${trade.buyer_network}</span></div>
+                    <div><strong>Seller Network:</strong> <span style="color: #dc3545;">${trade.seller_network}</span></div>
+                </div>
+                <div style="margin-top: 8px; font-size: 12px; color: #666;">
+                    <div><strong>Trade ID:</strong> ${trade.trade_id}</div>
+                    <div><strong>Executed:</strong> ${timestamp}</div>
+                    <div><strong>Details:</strong> ${trade.transaction_data}</div>
+                </div>
+            `;
+            container.appendChild(tradeDiv);
+        });
+
+        log(`Loaded ${data.cross_network_trades.length} cross-network trades`, 'SUCCESS');
+
+    } catch (error) {
+        log(`Error loading cross-network trades: ${error.message}`, 'ERROR');
+        document.getElementById('cross-network-trades').innerHTML =
+            `<div class="error">Failed to load cross-network trades: ${error.message}<br>Check if enterprise validator is running and API is accessible.</div>`;
+    }
+}
+
+// Also update the loadDashboard function to include cross-network trades:
+// Find this function and make sure it looks like this:
+
+async function loadDashboard() {
+    log('Loading dashboard data...');
+
+    try {
+        await Promise.all([
+            loadValidatorStatus(),
+            loadBlocks(),
+            loadTenants(),
+            loadCrossNetworkTrades()  // Make sure this line is added
+        ]);
+        log('Dashboard loaded successfully', 'SUCCESS');
+    } catch (error) {
+        log(`Error loading dashboard: ${error.message}`, 'ERROR');
+        showError('Failed to load dashboard data: ' + error.message);
+    }
+}
 
         async function debugBlocks() {
             log('Running blocks debug check...');

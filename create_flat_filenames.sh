@@ -71,9 +71,9 @@ echo ""
 
 # Extract files recursively from main source directories
 extract_files_recursive "src"
+extract_files_recursive "public"
 
 # Extract files from other directories (single level)
-extract_files_single "public"
 extract_files_single "docker"
 
 # Copy root configuration files
