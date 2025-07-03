@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Distli Mesh BC - Blockchain Trading</title>
+    <title>Distli Mesh BC - Distributed Blockchain with Leadership</title>
     <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
-    <h1>Distli Mesh BC - Blockchain Trading</h1>
+    <h1>🏛️ Distli Mesh BC - Distributed Blockchain with Robust Leadership</h1>
     
-    <!-- Status and connection -->
+    <!-- Enhanced Status and Connection with Leadership -->
     <div class="container">
         <div class="status">
             <div class="stat">
@@ -32,6 +32,7 @@
                 <strong id="network-name">None</strong>
                 <div>Network</div>
             </div>
+            <!-- Leadership status will be added dynamically by app.js -->
         </div>
         
         <div style="margin-bottom: 15px;">
@@ -52,6 +53,14 @@
             <button id="connect-all-btn" disabled>Connect All</button>
             <button id="sync-blockchain-btn" disabled>Sync to Enterprise</button>
         </div>
+        
+        <!-- Leadership Debug Controls -->
+        <div style="margin-bottom: 15px; padding: 10px; background: #f8f9fa; border-radius: 4px; border-left: 4px solid #17a2b8;">
+            <strong>🏛️ Leadership Controls:</strong>
+            <button onclick="showLeadershipStatus()" class="btn btn-info" style="margin-left: 10px;">Show Leadership Status</button>
+            <button onclick="forceLeadershipElection()" class="btn btn-warning">Force Election</button>
+            <button onclick="toggleLeadershipDebug()" class="btn btn-secondary">Toggle Debug</button>
+        </div>
     </div>
 
     <!-- Trading Tabs -->
@@ -70,6 +79,17 @@
             <input type="text" id="tx-input" placeholder="Enter message">
             <button id="send-btn" disabled>Send Message</button>
             <button id="mine-btn" disabled>Mine Block</button>
+            
+            <!-- Enhanced Mining Information -->
+            <div id="mining-info" style="margin-top: 15px; padding: 10px; background: #e9ecef; border-radius: 4px; display: none;">
+                <h4>⛏️ Mining Information</h4>
+                <div id="mining-status">Checking leadership status...</div>
+                <div style="margin-top: 10px;">
+                    <button onclick="debugOrderBook()" class="btn btn-info">Debug Order Book</button>
+                    <button onclick="clearPendingTransactions()" class="btn btn-warning">Clear Pending</button>
+                    <button onclick="monitorNetworkHealth()" class="btn btn-secondary">Network Health</button>
+                </div>
+            </div>
         </div>
 
         <div class="tab-content" id="trading-tab">
@@ -89,33 +109,324 @@
         </div>
     </div>
 
-    <!-- Connected Peers -->
+    <!-- Enhanced Connected Peers with Leadership Indicators -->
     <div class="container">
-        <h3>Connected Peers</h3>
+        <h3>🌐 Network Peers & Leadership</h3>
+        <div style="margin-bottom: 10px;">
+            <div class="network-health" id="network-health">
+                <!-- Health indicators will be populated dynamically -->
+            </div>
+        </div>
         <div class="peers" id="peers-list">
             <div>No peers connected</div>
         </div>
+        <div style="margin-top: 10px; font-size: 12px; color: #666;" id="network-summary">
+            <!-- Network summary will be populated dynamically -->
+        </div>
     </div>
 
-    <!-- Blockchain -->
+    <!-- Enhanced Blockchain Display -->
     <div class="container">
-        <h3>Blockchain</h3>
+        <h3>⛓️ Blockchain</h3>
         <div id="pending-transactions" style="margin-bottom: 15px;"></div>
         <div id="blockchain"></div>
+        
+        <!-- Blockchain Statistics -->
+        <div style="margin-top: 15px; padding: 10px; background: #f8f9fa; border-radius: 4px;">
+            <h4>📊 Blockchain Statistics</h4>
+            <div id="blockchain-stats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px;">
+                <!-- Stats will be populated dynamically -->
+            </div>
+        </div>
     </div>
 
-    <!-- Activity Log -->
+    <!-- Enhanced Activity Log -->
     <div class="container">
-        <h3>Activity Log</h3>
+        <h3>📋 Activity Log</h3>
+        <div style="margin-bottom: 10px;">
+            <button onclick="clearLog()" class="btn btn-secondary">Clear Log</button>
+            <button onclick="exportLog()" class="btn btn-info">Export Log</button>
+        </div>
         <div class="log" id="log"></div>
+    </div>
+
+    <!-- Leadership Debug Panel (hidden by default) -->
+    <div class="container" id="leadership-debug-panel" style="display: none;">
+        <!-- Content will be populated by app.js -->
     </div>
 
     <!-- Load JavaScript modules in order -->
     <script src="js/blockchain-core.js"></script>
     <script src="js/mesh-network.js"></script>
+    <script src="js/leadership-manager.js"></script>
     <script src="js/smart-contracts.js"></script>
     <script src="js/trading.js"></script>
     <script src="js/ui-controller.js"></script>
     <script src="js/app.js"></script>
+
+    <!-- Enhanced JavaScript for additional functionality -->
+    <script>
+        // Additional utility functions for the enhanced UI
+        
+        function clearLog() {
+            const logDiv = document.getElementById('log');
+            if (logDiv) {
+                logDiv.innerHTML = '';
+                log('Activity log cleared');
+            }
+        }
+        
+        function exportLog() {
+            const logDiv = document.getElementById('log');
+            if (logDiv) {
+                const logContent = logDiv.textContent;
+                const blob = new Blob([logContent], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `blockchain-log-${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.txt`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                log('Activity log exported');
+            }
+        }
+        
+        function updateNetworkHealth() {
+            const healthDiv = document.getElementById('network-health');
+            const summaryDiv = document.getElementById('network-summary');
+            
+            if (healthDiv && window.mesh && window.blockchain) {
+                const isConnected = window.mesh.connected;
+                const hasNetwork = window.mesh.currentNetwork;
+                const peerCount = window.mesh.dataChannels ? window.mesh.dataChannels.size : 0;
+                const isLeader = window.leadershipManager ? window.leadershipManager.isLeader() : window.blockchain.isMiningLeader;
+                const pendingCount = window.blockchain.pending.length;
+                
+                let healthHTML = '';
+                
+                // Connection health
+                healthHTML += `<div class="health-indicator ${isConnected ? 'health-good' : 'health-error'}">
+                    ${isConnected ? '🟢' : '🔴'} Connection
+                </div>`;
+                
+                // Network health
+                if (hasNetwork) {
+                    healthHTML += `<div class="health-indicator health-good">🌐 Network: ${hasNetwork}</div>`;
+                } else {
+                    healthHTML += `<div class="health-indicator health-warning">⚠️ No Network</div>`;
+                }
+                
+                // Leadership health
+                if (isLeader) {
+                    healthHTML += `<div class="health-indicator health-good">👑 Leader</div>`;
+                } else {
+                    healthHTML += `<div class="health-indicator health-warning">👥 Follower</div>`;
+                }
+                
+                // Peer health
+                if (peerCount > 0) {
+                    healthHTML += `<div class="health-indicator health-good">👥 ${peerCount} Peers</div>`;
+                } else if (hasNetwork) {
+                    healthHTML += `<div class="health-indicator health-warning">👤 Solo</div>`;
+                }
+                
+                // Pending transactions health
+                if (pendingCount > 10) {
+                    healthHTML += `<div class="health-indicator health-warning">⚠️ ${pendingCount} Pending</div>`;
+                } else if (pendingCount > 0) {
+                    healthHTML += `<div class="health-indicator health-good">📋 ${pendingCount} Pending</div>`;
+                }
+                
+                healthDiv.innerHTML = healthHTML;
+                
+                // Update summary
+                if (summaryDiv) {
+                    let summaryText = '';
+                    if (window.leadershipManager) {
+                        const state = window.leadershipManager.getState();
+                        summaryText = `Leadership: ${state.state} | Term: ${state.term} | Total Peers: ${state.totalPeers}`;
+                        if (state.currentLeader) {
+                            summaryText += ` | Leader: ${state.currentLeader.substring(0, 8)}`;
+                        }
+                    } else {
+                        summaryText = `Legacy leadership mode | ${isLeader ? 'Leader' : 'Follower'}`;
+                    }
+                    summaryDiv.textContent = summaryText;
+                }
+            }
+        }
+        
+        function updateBlockchainStats() {
+            const statsDiv = document.getElementById('blockchain-stats');
+            
+            if (statsDiv && window.blockchain) {
+                const chain = window.blockchain.chain;
+                const pending = window.blockchain.pending;
+                
+                let totalTransactions = 0;
+                let contractCalls = 0;
+                let messages = 0;
+                
+                chain.forEach(block => {
+                    if (block.transactions) {
+                        totalTransactions += block.transactions.length;
+                        block.transactions.forEach(tx => {
+                            if (tx.type === 'contract_call') contractCalls++;
+                            else if (tx.type === 'message') messages++;
+                        });
+                    }
+                });
+                
+                statsDiv.innerHTML = `
+                    <div class="stat">
+                        <strong>${chain.length}</strong>
+                        <div>Total Blocks</div>
+                    </div>
+                    <div class="stat">
+                        <strong>${totalTransactions}</strong>
+                        <div>Total Transactions</div>
+                    </div>
+                    <div class="stat">
+                        <strong>${contractCalls}</strong>
+                        <div>Contract Calls</div>
+                    </div>
+                    <div class="stat">
+                        <strong>${messages}</strong>
+                        <div>Messages</div>
+                    </div>
+                    <div class="stat">
+                        <strong>${pending.length}</strong>
+                        <div>Pending</div>
+                    </div>
+                `;
+            }
+        }
+        
+        // Enhanced periodic updates
+        setInterval(() => {
+            if (window.mesh && window.blockchain) {
+                updateNetworkHealth();
+                updateBlockchainStats();
+            }
+        }, 2000);
+        
+        // Show mining info when there are pending transactions
+        function updateMiningInfo() {
+            const miningInfo = document.getElementById('mining-info');
+            const miningStatus = document.getElementById('mining-status');
+            
+            if (miningInfo && miningStatus && window.blockchain) {
+                const hasPending = window.blockchain.pending.length > 0;
+                const isLeader = window.leadershipManager ? window.leadershipManager.isLeader() : window.blockchain.isMiningLeader;
+                
+                if (hasPending) {
+                    miningInfo.style.display = 'block';
+                    
+                    if (isLeader) {
+                        miningStatus.innerHTML = `
+                            <div style="color: #28a745;">✅ You are the mining leader</div>
+                            <div>Pending transactions: ${window.blockchain.pending.length}</div>
+                            <div>Auto-mining enabled</div>
+                        `;
+                    } else {
+                        miningStatus.innerHTML = `
+                            <div style="color: #ffc107;">⏳ Waiting for mining leader</div>
+                            <div>Pending transactions: ${window.blockchain.pending.length}</div>
+                            <div>Leader will auto-mine when ready</div>
+                        `;
+                    }
+                } else {
+                    miningInfo.style.display = 'none';
+                }
+            }
+        }
+        
+        // Update mining info periodically
+        setInterval(updateMiningInfo, 1000);
+        
+        // Enhanced tab switching with animations
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.addEventListener('click', () => {
+                    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                    document.querySelectorAll('.tab-content').forEach(c => {
+                        c.classList.remove('active');
+                        c.style.display = 'none';
+                    });
+                    
+                    tab.classList.add('active');
+                    const targetTab = document.getElementById(tab.dataset.tab + '-tab');
+                    if (targetTab) {
+                        targetTab.style.display = 'block';
+                        targetTab.classList.add('active', 'fade-in');
+                    }
+                });
+            });
+            
+            // Initial setup
+            updateNetworkHealth();
+            updateBlockchainStats();
+            updateMiningInfo();
+        });
+        
+        // Keyboard shortcuts
+        document.addEventListener('keydown', function(e) {
+            // Ctrl+M for mining
+            if (e.ctrlKey && e.key === 'm') {
+                e.preventDefault();
+                const mineBtn = document.getElementById('mine-btn');
+                if (mineBtn && !mineBtn.disabled) {
+                    mineBtn.click();
+                }
+            }
+            
+            // Ctrl+L for leadership status
+            if (e.ctrlKey && e.key === 'l') {
+                e.preventDefault();
+                if (typeof showLeadershipStatus === 'function') {
+                    showLeadershipStatus();
+                }
+            }
+            
+            // Ctrl+D for debug
+            if (e.ctrlKey && e.key === 'd') {
+                e.preventDefault();
+                if (typeof debugOrderBook === 'function') {
+                    debugOrderBook();
+                }
+            }
+        });
+        
+        // Add helpful tooltips
+        document.addEventListener('DOMContentLoaded', function() {
+            const tooltips = [
+                { selector: '#mine-btn', text: 'Mine a new block (Ctrl+M)' },
+                { selector: '#leadership-status', text: 'Current leadership status in network' },
+                { selector: '#peer-count', text: 'Number of connected peers' },
+                { selector: '#pending-count', text: 'Transactions waiting to be mined' }
+            ];
+            
+            tooltips.forEach(tip => {
+                const element = document.querySelector(tip.selector);
+                if (element) {
+                    element.title = tip.text;
+                }
+            });
+        });
+        
+        // Global error handler for better debugging
+        window.addEventListener('error', function(e) {
+            console.error('Global error:', e.error);
+            log(`❌ Error: ${e.error.message}`);
+        });
+        
+        // Unhandled promise rejection handler
+        window.addEventListener('unhandledrejection', function(e) {
+            console.error('Unhandled promise rejection:', e.reason);
+            log(`❌ Promise Error: ${e.reason}`);
+        });
+    </script>
 </body>
 </html>

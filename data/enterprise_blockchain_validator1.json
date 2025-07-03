@@ -9,77 +9,123 @@
       "merkle_root": "0000000000000000000000000000000000000000000000000000000000000000",
       "nonce": 0,
       "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
-      "timestamp": 1751488328,
+      "timestamp": 1751531353,
       "transactions": [],
       "validator": "genesis"
     },
     {
-      "hash": "007d49c8ff14b3ce6a3d275bfa430fd42fb0829feb91c1dd9c292de968c053af",
+      "hash": "0096d475bf444e42da82cb6f90fe667b4eb31641310cbf597a087535e281b9de",
       "height": 1,
-      "merkle_root": "e4265f15751ce03e966ad18a978f1b7bc0ff7bd476b9e8d62f66aad5fe1ced22",
-      "nonce": 1059,
+      "merkle_root": "075c437c8a4ac0c16ea0cfda04e099e20c6b23e8121a64da6f318cde29e4d22b",
+      "nonce": 230,
       "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
-      "timestamp": 1751488558,
+      "timestamp": 1751531766,
       "transactions": [
         {
           "contract_address": null,
-          "execution_result": "{\"asset\":\"BTC\",\"buyer_network\":\"NET_AB\",\"buyer_order_id\":1,\"price\":1000.0,\"quantity\":50.0,\"seller_network\":\"NET_BA\",\"seller_order_id\":2,\"timestamp\":1751488558,\"trade_id\":\"cross_NET_AB_NET_BA\"}",
+          "execution_result": "{\"asset\":\"BTC\",\"buyer_network\":\"buy_ETH_sell_BTC\",\"buyer_order_id\":3,\"price\":1000.0,\"quantity\":10.0,\"seller_network\":\"buy_BTC_sell_ETH\",\"seller_order_id\":4,\"timestamp\":1751531766,\"trade_id\":\"cross_buy_ETH_sell_BTC_buy_BTC_sell_ETH\"}",
           "from_peer": "enterprise_matcher",
           "gas_used": null,
           "tenant_block_hash": "cross_network_trade",
           "tenant_block_id": 0,
           "tenant_network": "cross_network",
-          "timestamp": 1751488558,
-          "transaction_data": "Cross-network trade: 50 BTC @ 1000 between NET_AB and NET_BA",
-          "tx_id": "cross_trade_NET_AB_NET_BA"
+          "timestamp": 1751531766,
+          "transaction_data": "Cross-network trade: 10 BTC @ 1000 between buy_ETH_sell_BTC and buy_BTC_sell_ETH",
+          "tx_id": "cross_trade_buy_ETH_sell_BTC_buy_BTC_sell_ETH"
         }
       ],
       "validator": "validator1"
     }
   ],
   "executed_cross_network_trades": [
-    "NET_BA:2:sell:BTC:1000:1000",
-    "NET_AB:1:buy:BTC:50:1000"
+    "buy_BTC_sell_ETH:4:sell:BTC:450:1000",
+    "buy_ETH_sell_BTC:3:buy:BTC:10:1000"
   ],
   "last_validator_heartbeat": {
-    "validator1": 1751488808
+    "validator1": 1751531863
   },
   "pending_transactions": [],
   "tenant_blocks": [
     {
-      "block_hash": "0001751488458473",
+      "block_hash": "0001751531460564",
       "block_id": 1,
-      "from_peer": "user_z9kytqbdr",
-      "network_id": "NET_BA",
+      "from_peer": "user_lgfenhi95",
+      "network_id": "buy_BTC_sell_ETH",
       "previous_hash": "000genesis",
-      "timestamp": 1751488458,
+      "timestamp": 1751531460,
+      "transactions": [
+        "hello from the network buy_BTC_sell_ETH"
+      ]
+    },
+    {
+      "block_hash": "0001751531503646",
+      "block_id": 1,
+      "from_peer": "user_ssjbdushw",
+      "network_id": "buy_ETH_sell_BTC",
+      "previous_hash": "000genesis",
+      "timestamp": 1751531503,
+      "transactions": [
+        "hello from the network buy_ETH_sell_BTC",
+        "hello from the network buy_ETH_sell_BTC"
+      ]
+    },
+    {
+      "block_hash": "0001751531579596",
+      "block_id": 2,
+      "from_peer": "user_ssjbdushw",
+      "network_id": "buy_ETH_sell_BTC",
+      "previous_hash": "0001751531503646",
+      "timestamp": 1751531579,
+      "transactions": [
+        "hello from the buy_ETH"
+      ]
+    },
+    {
+      "block_hash": "0001751531639422",
+      "block_id": 2,
+      "from_peer": "user_eraz86z3w",
+      "network_id": "buy_BTC_sell_ETH",
+      "previous_hash": "0001751531460564",
+      "timestamp": 1751531639,
+      "transactions": [
+        "hello from the network buy_BTC_sell_ETH",
+        "hello from the network buy_BTC_sell_ETH"
+      ]
+    },
+    {
+      "block_hash": "0001751531683646",
+      "block_id": 3,
+      "from_peer": "user_eraz86z3w",
+      "network_id": "buy_BTC_sell_ETH",
+      "previous_hash": "0001751531639422",
+      "timestamp": 1751531683,
       "transactions": [
         "buy: {\"asset\":\"BTC\",\"quantity\":100,\"price\":1000}"
       ]
     },
     {
-      "block_hash": "0001751488521088",
-      "block_id": 2,
-      "from_peer": "user_fltz5cxbr",
-      "network_id": "NET_BA",
-      "previous_hash": "0001751488458473",
-      "timestamp": 1751488521,
+      "block_hash": "0001751531719364",
+      "block_id": 4,
+      "from_peer": "user_eraz86z3w",
+      "network_id": "buy_BTC_sell_ETH",
+      "previous_hash": "0001751531683646",
+      "timestamp": 1751531719,
       "transactions": [
-        "sell: {\"asset\":\"BTC\",\"quantity\":1000,\"price\":1000}"
+        "sell: {\"asset\":\"BTC\",\"quantity\":450,\"price\":1000}"
       ]
     },
     {
-      "block_hash": "0001751488558561",
-      "block_id": 1,
-      "from_peer": "user_txn1jztgj",
-      "network_id": "NET_AB",
-      "previous_hash": "000genesis",
-      "timestamp": 1751488558,
+      "block_hash": "0001751531766246",
+      "block_id": 3,
+      "from_peer": "user_7deufn5ze",
+      "network_id": "buy_ETH_sell_BTC",
+      "previous_hash": "0001751531600771",
+      "timestamp": 1751531766,
       "transactions": [
-        "buy: {\"asset\":\"BTC\",\"quantity\":50,\"price\":1000}"
+        "buy: {\"asset\":\"BTC\",\"quantity\":10,\"price\":1000}"
       ]
     }
   ],
-  "tracker_url": "http://192.168.200.132:3030",
+  "tracker_url": "http://192.168.200.133:3030",
   "validator_id": "validator1"
 }

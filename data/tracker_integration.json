@@ -1,53 +1,91 @@
 {
   "last_reported_state": {
-    "NET_AB": {
-      "last_reported_block_id": 1,
-      "last_update": 1751488558
+    "buy_BTC_sell_ETH": {
+      "last_reported_block_id": 4,
+      "last_update": 1751531719
     },
-    "NET_BA": {
-      "last_reported_block_id": 2,
-      "last_update": 1751488521
+    "buy_ETH_sell_BTC": {
+      "last_reported_block_id": 3,
+      "last_update": 1751531766
     }
   },
   "network_blockchain_state": {
-    "NET_AB": {
+    "buy_BTC_sell_ETH": {
       "blocks": [
         {
-          "block_hash": "0001751488558561",
+          "block_hash": "0001751531460564",
           "block_id": 1,
           "previous_hash": "000genesis",
-          "timestamp": 1751488558,
+          "timestamp": 1751531460,
           "transactions": [
-            "buy: {\"asset\":\"BTC\",\"quantity\":50,\"price\":1000}"
+            "hello from the network buy_BTC_sell_ETH"
           ]
-        }
-      ],
-      "last_block_id": 1,
-      "last_update": 1751488558
-    },
-    "NET_BA": {
-      "blocks": [
+        },
         {
-          "block_hash": "0001751488458473",
-          "block_id": 1,
-          "previous_hash": "000genesis",
-          "timestamp": 1751488458,
+          "block_hash": "0001751531639422",
+          "block_id": 2,
+          "previous_hash": "0001751531460564",
+          "timestamp": 1751531639,
+          "transactions": [
+            "hello from the network buy_BTC_sell_ETH",
+            "hello from the network buy_BTC_sell_ETH"
+          ]
+        },
+        {
+          "block_hash": "0001751531683646",
+          "block_id": 3,
+          "previous_hash": "0001751531639422",
+          "timestamp": 1751531683,
           "transactions": [
             "buy: {\"asset\":\"BTC\",\"quantity\":100,\"price\":1000}"
           ]
         },
         {
-          "block_hash": "0001751488521088",
-          "block_id": 2,
-          "previous_hash": "0001751488458473",
-          "timestamp": 1751488521,
+          "block_hash": "0001751531719364",
+          "block_id": 4,
+          "previous_hash": "0001751531683646",
+          "timestamp": 1751531719,
           "transactions": [
-            "sell: {\"asset\":\"BTC\",\"quantity\":1000,\"price\":1000}"
+            "sell: {\"asset\":\"BTC\",\"quantity\":450,\"price\":1000}"
           ]
         }
       ],
-      "last_block_id": 2,
-      "last_update": 1751488521
+      "last_block_id": 4,
+      "last_update": 1751531719
+    },
+    "buy_ETH_sell_BTC": {
+      "blocks": [
+        {
+          "block_hash": "0001751531503646",
+          "block_id": 1,
+          "previous_hash": "000genesis",
+          "timestamp": 1751531503,
+          "transactions": [
+            "hello from the network buy_ETH_sell_BTC",
+            "hello from the network buy_ETH_sell_BTC"
+          ]
+        },
+        {
+          "block_hash": "0001751531579596",
+          "block_id": 2,
+          "previous_hash": "0001751531503646",
+          "timestamp": 1751531579,
+          "transactions": [
+            "hello from the buy_ETH"
+          ]
+        },
+        {
+          "block_hash": "0001751531766246",
+          "block_id": 3,
+          "previous_hash": "0001751531600771",
+          "timestamp": 1751531766,
+          "transactions": [
+            "buy: {\"asset\":\"BTC\",\"quantity\":10,\"price\":1000}"
+          ]
+        }
+      ],
+      "last_block_id": 3,
+      "last_update": 1751531766
     }
   }
 }
