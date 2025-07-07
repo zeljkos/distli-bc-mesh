@@ -1,5 +1,4 @@
-// Entry point for enterprise dashboard binary
-use distli_mesh_bc::enterprise_bc::dashboard;
+use distli_mesh_bc::enterprise_bc::start_dashboard;
 use clap::Parser;
 
 #[derive(Parser)]
@@ -18,5 +17,5 @@ async fn main() {
     
     println!("Starting enterprise dashboard on port {}", args.port);
     
-    dashboard::start_dashboard(args.port).await;
+    start_dashboard(args.port).await;
 }

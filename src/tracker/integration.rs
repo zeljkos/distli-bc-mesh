@@ -1,6 +1,5 @@
 // Fixed integration.rs - uses enterprise types throughout
-use crate::common::time::current_timestamp;
-use crate::enterprise_bc::{TenantBlockchainUpdate, TenantBlockData};
+use crate::blockchain::{TenantBlockchainUpdate, TenantBlockData};
 use std::collections::HashMap;
 use tokio::time::{interval, Duration};
 use tracing::{info, warn};
@@ -8,19 +7,27 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
 
-pub type Networks = std::sync::Arc<tokio::sync::RwLock<HashMap<String, HashMap<String, crate::common::types::NetworkPeer>>>>;
+// Simple time utility
+fn current_timestamp() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+}
+
+pub type Networks = std::sync::Arc<tokio::sync::RwLock<HashMap<String, HashMap<String, crate::tracker::server::NetworkPeer>>>>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct TenantState {
-    last_reported_block_id: u64,
-    last_update: u64,
+    last_reported_block_id: u32,  // Changed from u64 to u32
+    last_update: u64,  // Keep u64 for timestamps
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct NetworkBlockchainState {
     blocks: Vec<TenantBlockData>,
-    last_block_id: u64,
-    last_update: u64,
+    last_block_id: u32,  // Changed from u64 to u32
+    last_update: u64,  // Keep u64 for timestamps
 }
 
 pub struct EnterpriseIntegration {

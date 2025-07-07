@@ -1,9 +1,7 @@
-// Fixed tracker server - uses enterprise types throughout
-use crate::common::types::{Message, NetworkPeer};
-use crate::common::api_utils;
+use crate::blockchain::{Blockchain, Block, Transaction, TenantBlockchainUpdate, TenantBlockData};
 use crate::tracker::integration::EnterpriseIntegration;
-use crate::enterprise_bc::{TenantBlockchainUpdate, TenantBlockData}; // Use enterprise type
 use futures_util::{SinkExt, StreamExt};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{mpsc, RwLock};
@@ -11,16 +9,64 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 use uuid::Uuid;
 use warp::ws::{WebSocket, Message as WsMessage};
 use warp::Filter;
-use serde_json::json;
 
-pub type Networks = Arc<RwLock<HashMap<String, HashMap<String, NetworkPeer>>>>;
+type Networks = Arc<RwLock<HashMap<String, HashMap<String, NetworkPeer>>>>;
 type GlobalPeers = Arc<RwLock<HashMap<String, mpsc::UnboundedSender<Result<WsMessage, warp::Error>>>>>;
-pub type SharedIntegration = Arc<RwLock<Option<EnterpriseIntegration>>>;
+
+#[derive(Debug, Clone)]
+pub struct NetworkPeer {
+    pub peer_id: String,
+    pub network_id: String,
+    pub sender: mpsc::UnboundedSender<Result<WsMessage, warp::Error>>,
+    pub joined_at: std::time::Instant,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum Message {
+    #[serde(rename = "join_network")]
+    JoinNetwork { network_id: String },
+    
+    #[serde(rename = "peers")]
+    Peers { peers: Vec<String> },
+    
+    #[serde(rename = "offer")]
+    Offer { target: String, offer: serde_json::Value },
+    
+    #[serde(rename = "answer")]
+    Answer { target: String, answer: serde_json::Value },
+    
+    #[serde(rename = "candidate")]
+    Candidate { target: String, candidate: serde_json::Value },
+    
+    #[serde(rename = "block")]
+    Block { block: Block },
+    
+    #[serde(rename = "transaction")]
+    Transaction { transaction: Transaction },
+    
+    #[serde(rename = "message")]  // ADD THIS LINE
+    ChatMessage { content: String, sender: String, timestamp: u64 },  // ADD THIS LINE
+    
+    #[serde(rename = "network_info")]
+    NetworkInfo { network_id: String, peer_count: usize },
+    
+    #[serde(rename = "network_list_update")]
+    NetworkListUpdate { networks: Vec<serde_json::Value> },
+    
+    #[serde(rename = "blockchain_sync")]
+    BlockchainSync { network_id: String, blocks: Vec<Block> },
+
+    #[serde(rename = "enterprise_sync")]
+    EnterpriseSync { network_id: String, sync_data: serde_json::Value },
+}
 
 pub struct Tracker {
     networks: Networks,
     global_peers: GlobalPeers,
-    integration: SharedIntegration,
+    enterprise_blockchain: Arc<RwLock<Blockchain>>,
+    enterprise_url: Option<String>,
+    enterprise_integration: Option<Arc<RwLock<EnterpriseIntegration>>>,
 }
 
 impl Tracker {
@@ -28,46 +74,63 @@ impl Tracker {
         Tracker {
             networks: Arc::new(RwLock::new(HashMap::new())),
             global_peers: Arc::new(RwLock::new(HashMap::new())),
-            integration: Arc::new(RwLock::new(None)),
+            enterprise_blockchain: Arc::new(RwLock::new(Blockchain::new())),
+            enterprise_url: None,
+            enterprise_integration: None,
         }
     }
     
+    pub fn set_enterprise_url(&mut self, url: String) {
+        self.enterprise_url = Some(url);
+    }
+
     pub fn get_networks_ref(&self) -> Networks {
         self.networks.clone()
     }
-    
-    pub async fn set_integration(&self, integration: EnterpriseIntegration) {
-        let mut int_lock = self.integration.write().await;
-        *int_lock = Some(integration);
+
+    pub async fn set_integration(&mut self, integration: EnterpriseIntegration) {
+        self.enterprise_integration = Some(Arc::new(RwLock::new(integration)));
     }
     
     pub async fn run(&self) {
         let networks = self.networks.clone();
         let global_peers = self.global_peers.clone();
-        let integration = self.integration.clone();
+        let enterprise_blockchain = self.enterprise_blockchain.clone();
+        let enterprise_integration = self.enterprise_integration.clone();
         
         let ws_route = warp::path("ws")
             .and(warp::ws())
             .and(warp::any().map({
                 let networks = networks.clone();
                 let global_peers = global_peers.clone();
-                let integration = integration.clone();
-                move || (networks.clone(), global_peers.clone(), integration.clone())
+                let enterprise_blockchain = enterprise_blockchain.clone();
+                let enterprise_integration = enterprise_integration.clone();
+                move || (networks.clone(), global_peers.clone(), enterprise_blockchain.clone(), enterprise_integration.clone())
             }))
-            .map(|ws: warp::ws::Ws, (networks, global_peers, integration)| {
-                ws.on_upgrade(move |socket| handle_peer(socket, networks, global_peers, integration))
+            .map(|ws: warp::ws::Ws, (networks, global_peers, enterprise_blockchain, enterprise_integration)| {
+                ws.on_upgrade(move |socket| handle_peer(socket, networks, global_peers, enterprise_blockchain, enterprise_integration))
             });
 
-        // Use enterprise format throughout
-        let blockchain_update_route = warp::path("api")
-            .and(warp::path("blockchain-update"))
+        let blockchain_sync_route = warp::path("api")
+            .and(warp::path("blockchain-sync"))
             .and(warp::post())
             .and(warp::body::json())
             .and(warp::any().map({
-                let integration = integration.clone();
-                move || integration.clone()
+                let enterprise_blockchain = enterprise_blockchain.clone();
+                move || enterprise_blockchain.clone()
             }))
-            .and_then(handle_blockchain_update);
+            .and_then(handle_blockchain_sync);
+
+        let enterprise_update_route = warp::path("api")
+            .and(warp::path("enterprise-update"))
+            .and(warp::post())
+            .and(warp::body::json())
+            .and(warp::any().map({
+                let networks = networks.clone();
+                let global_peers = global_peers.clone();
+                move || (networks.clone(), global_peers.clone())
+            }))
+            .and_then(handle_enterprise_update);
 
         let networks_for_api = self.networks.clone();
         let api_route = warp::path("api")
@@ -85,72 +148,148 @@ impl Tracker {
 
         let health = warp::path("health")
             .and(warp::get())
-            .map(|| api_utils::health_check());
+            .map(|| warp::reply::json(&serde_json::json!({
+                "status": "healthy",
+                "timestamp": std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs()
+            })));
             
         let static_files = warp::fs::dir("public");
         
         let routes = ws_route
-            .or(blockchain_update_route)
+            .or(blockchain_sync_route)
+            .or(enterprise_update_route)
             .or(api_route)
             .or(api_list_route)
             .or(health)
             .or(static_files)
             .with(warp::cors().allow_any_origin());
         
-        println!("Multi-tenant tracker running on http://0.0.0.0:3030");
+        println!("Tracker running on http://0.0.0.0:3030");
         warp::serve(routes).run(([0, 0, 0, 0], 3030)).await;
     }
 }
 
-// Use enterprise format
-async fn handle_blockchain_update(
-    update: TenantBlockchainUpdate,
-    integration: SharedIntegration
+async fn handle_enterprise_update(
+    enterprise_update: serde_json::Value,
+    (networks, _global_peers): (Networks, GlobalPeers)
 ) -> Result<impl warp::Reply, warp::Rejection> {
-    println!("Received blockchain update from {}: {} new blocks", 
-             update.network_id, update.new_blocks.len());
+    println!("Received enterprise update from validator");
     
-    let total_blocks = update.new_blocks.len();
-    let total_transactions: usize = update.new_blocks.iter()
-        .map(|block| block.transactions.len())
-        .sum();
+    if let Some(network_id) = enterprise_update["network_id"].as_str() {
+        println!("Broadcasting enterprise update to network: {}", network_id);
+        
+        let message = Message::BlockchainSync {
+            network_id: network_id.to_string(),
+            blocks: enterprise_update["blocks"].as_array()
+                .unwrap_or(&vec![])
+                .iter()
+                .filter_map(|b| serde_json::from_value(b.clone()).ok())
+                .collect()
+        };
+        
+        broadcast_to_network(&networks, network_id, "enterprise", message).await;
+        
+        println!("✅ Enterprise update broadcast to {} network peers", network_id);
+        
+        Ok(warp::reply::json(&serde_json::json!({
+            "status": "success",
+            "message": "Enterprise update broadcast to network peers"
+        })))
+    } else {
+        println!("❌ Invalid enterprise update - missing network_id");
+        Ok(warp::reply::json(&serde_json::json!({
+            "status": "error",
+            "message": "Invalid enterprise update format"
+        })))
+    }
+}
+
+async fn handle_blockchain_sync(
+    sync_message: serde_json::Value,
+    _enterprise_blockchain: Arc<RwLock<Blockchain>>
+) -> Result<impl warp::Reply, warp::Rejection> {
+    println!("Received blockchain sync from network");
     
-    // Log block details
-    if !update.new_blocks.is_empty() {
-        println!("Block details received:");
-        for block in &update.new_blocks {
-            if !block.transactions.is_empty() {
-                println!("   Block #{}: {} transactions", block.block_id, block.transactions.len());
-                for tx in &block.transactions {
-                    println!("     - {}", tx);
-                }
-            }
-        }
+    // Forward to enterprise validator if configured
+    if let Some(url) = std::env::var("ENTERPRISE_BC_URL").ok() {
+        tokio::spawn(async move {
+            let client = reqwest::Client::new();
+            let _ = client
+                .post(&format!("{}/api/blockchain-sync", url))
+                .json(&sync_message)
+                .send()
+                .await;
+        });
     }
     
-    // Forward to enterprise BC
-    {
-        let mut int_lock = integration.write().await;
-        if let Some(ref mut integration_instance) = int_lock.as_mut() {
-            integration_instance.update_network_blockchain_state_with_update(&update).await;
-            println!("Blockchain data forwarded to enterprise BC!");
-        } else {
-            println!("No enterprise integration configured");
-        }
-    }
-    
-    Ok(warp::reply::json(&json!({
+    Ok(warp::reply::json(&serde_json::json!({
         "status": "success",
-        "message": "Blockchain update received and processed",
-        "network_id": update.network_id,
-        "new_blocks": total_blocks,
-        "transactions": total_transactions,
-        "immediate_processing": true
+        "message": "Blockchain synced"
     })))
 }
 
-// Helper functions remain the same
-async fn handle_peer(ws: WebSocket, networks: Networks, global_peers: GlobalPeers, integration: SharedIntegration) {
+// FIXED: Convert P2P blocks to enterprise format and send to validator
+// In src/tracker/server.rs, replace the send_block_to_enterprise function:
+
+async fn send_block_to_enterprise(block: &Block, network_id: &str, peer_id: &str) {
+    if let Some(enterprise_url) = std::env::var("ENTERPRISE_BC_URL").ok() {
+        println!(" Converting P2P block to enterprise format for network: {}", network_id);
+        
+        // Convert Block to TenantBlockData with FULL transaction data
+        let tenant_block = TenantBlockData {
+            block_id: block.height,
+            block_hash: block.hash.clone(),
+            transactions: block.transactions.iter().map(|tx| {
+                // Serialize complete transaction as JSON string
+                serde_json::to_string(tx).unwrap_or_else(|_| tx.id.clone())
+            }).collect(),
+            timestamp: block.timestamp,
+            previous_hash: block.previous_hash.clone(),
+            network_id: network_id.to_string(),
+        };
+        
+        // Create TenantBlockchainUpdate
+        let update = TenantBlockchainUpdate {
+            network_id: network_id.to_string(),
+            peer_id: peer_id.to_string(),
+            new_blocks: vec![tenant_block],
+            timestamp: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+        };
+        
+        // Send to enterprise validator
+        let client = reqwest::Client::new();
+        let url = format!("{}/api/tenant-blockchain-update", enterprise_url);
+        
+        match client.post(&url).json(&update).send().await {
+            Ok(response) => {
+                if response.status().is_success() {
+                    println!(" Successfully sent block #{} from network {} to enterprise validator", 
+                            block.height, network_id);
+                } else {
+                    println!(" Failed to send to enterprise validator: HTTP {}", response.status());
+                }
+            }
+            Err(e) => {
+                println!(" Error sending to enterprise validator: {}", e);
+            }
+        }
+    } else {
+        println!("⚠️No ENTERPRISE_BC_URL configured - skipping enterprise sync");
+    }
+}
+async fn handle_peer(
+    ws: WebSocket, 
+    networks: Networks, 
+    global_peers: GlobalPeers,
+    _enterprise_blockchain: Arc<RwLock<Blockchain>>,
+    enterprise_integration: Option<Arc<RwLock<EnterpriseIntegration>>>
+) {
     let peer_id = Uuid::new_v4().to_string();
     let (mut peer_ws_tx, mut peer_ws_rx) = ws.split();
     let (tx, rx) = mpsc::unbounded_channel();
@@ -176,8 +315,10 @@ async fn handle_peer(ws: WebSocket, networks: Networks, global_peers: GlobalPeer
     while let Some(result) = peer_ws_rx.next().await {
         if let Ok(msg) = result {
             if let Ok(text) = msg.to_str() {
+                println!("Received WebSocket message: {}", text);
                 if let Ok(message) = serde_json::from_str::<Message>(text) {
-                    match &message {
+                    println!("Parsed message type: {:?}", std::mem::discriminant(&message));
+                    match message.clone() {
                         Message::JoinNetwork { network_id } => {
                             if let Some(old_network) = &current_network {
                                 let mut networks_lock = networks.write().await;
@@ -206,58 +347,116 @@ async fn handle_peer(ws: WebSocket, networks: Networks, global_peers: GlobalPeer
                             
                             current_network = Some(network_id.clone());
                             
-                            let peer_list = get_network_peers(&networks, network_id, &peer_id).await;
-                            let _ = send_network_info(&networks, &peer_id, network_id).await;
+                            let peer_list = get_network_peers(&networks, &network_id, &peer_id).await;
+                            let _ = send_network_info(&networks, &peer_id, &network_id).await;
                             let _ = send_to_peer_direct(&tx, Message::Peers { peers: peer_list }).await;
                             
                             broadcast_network_list_update(&networks, &global_peers).await;
                             
                             println!("Peer {} joined network: {}", &peer_id[..8], network_id);
                         }
-                        Message::BlockchainUpdate { network_id, peer_id: update_peer_id, new_blocks, timestamp } => {
-                            println!("Received blockchain update from {}: {} blocks", network_id, new_blocks.len());
-                            
-                            // Convert to TenantBlockchainUpdate format
-                            let tenant_blocks: Vec<TenantBlockData> = new_blocks.iter()
-                                .filter_map(|block| {
-                                    Some(TenantBlockData {
-                                        block_id: block["block_id"].as_u64()?,
-                                        block_hash: block["block_hash"].as_str()?.to_string(),
-                                        transactions: block["transactions"].as_array()?
-                                            .iter()
-                                            .filter_map(|tx| tx.as_str().map(|s| s.to_string()))
-                                            .collect(),
-                                        timestamp: block["timestamp"].as_u64()?,
-                                        previous_hash: block["previous_hash"].as_str().unwrap_or("").to_string(),
-                                    })
-                                })
-                                .collect();
-                            
-                            let update = TenantBlockchainUpdate {
-                                network_id: network_id.clone(),
-                                peer_id: update_peer_id.clone(),
-                                new_blocks: tenant_blocks,
-                                timestamp: *timestamp,
-                            };
-                            
-                            // Forward to enterprise blockchain
-                            let integration_clone = integration.clone();
-                            tokio::spawn(async move {
-                                let mut int_lock = integration_clone.write().await;
-                                if let Some(ref mut integration_instance) = int_lock.as_mut() {
-                                    integration_instance.update_network_blockchain_state_with_update(&update).await;
-                                    println!("Blockchain data forwarded to enterprise BC from peer!");
-                                } else {
-                                    println!("No enterprise integration configured");
+                        Message::Block { block } => {
+                            println!(" Received Block message for block #{}", block.height);
+                            if let Some(network_id) = &current_network {
+                                println!("Received block #{} from peer {} in network {}", 
+                                        block.height, &peer_id[..8], network_id);
+                                
+                                // Broadcast to other peers in the network
+                                broadcast_to_network(&networks, network_id, &peer_id, message.clone()).await;
+                                
+                                // FIXED: Send to enterprise validator
+                                send_block_to_enterprise(&block, network_id, &peer_id).await;
+                                
+                                // Also update enterprise integration if available
+                                if let Some(ref integration) = enterprise_integration {
+                                    let tenant_block = TenantBlockData {
+                                        block_id: block.height,
+                                        block_hash: block.hash.clone(),
+                                        transactions: block.transactions.iter().map(|tx| tx.id.clone()).collect(),
+                                        timestamp: block.timestamp,
+                                        previous_hash: block.previous_hash.clone(),
+                                        network_id: network_id.clone(),  // ADD THIS LINE
+                                    };
+                                    
+                                    let update = TenantBlockchainUpdate {
+                                        network_id: network_id.clone(),
+                                        peer_id: peer_id.clone(),
+                                        new_blocks: vec![tenant_block],
+                                        timestamp: std::time::SystemTime::now()
+                                            .duration_since(std::time::UNIX_EPOCH)
+                                            .unwrap()
+                                            .as_secs(),
+                                    };
+                                    
+                                    let mut integration_lock = integration.write().await;
+                                    integration_lock.update_network_blockchain_state_with_update(&update).await;
+                                    println!("Updated enterprise integration with block #{}", block.height);
                                 }
-                            });
+                                
+                                println!("Block #{} processed and forwarded to enterprise", block.height);
+                            }
+                        }
+                        Message::EnterpriseSync { network_id, sync_data } => {
+                            println!("Received enterprise sync request from network: {}", network_id);
+
+                            if let Some(url) = std::env::var("ENTERPRISE_BC_URL").ok() {
+                                let sync_payload = serde_json::json!({
+                                    "type": "delta_sync",
+                                    "network_id": network_id,
+                                    "peer_id": peer_id,
+                                    "sync_data": sync_data,
+                                    "timestamp": std::time::SystemTime::now()
+                                        .duration_since(std::time::UNIX_EPOCH)
+                                        .unwrap()
+                                        .as_secs()
+                                });
+
+                                let url_clone = url.clone();
+                                let payload_clone = sync_payload.clone();
+                                tokio::spawn(async move {
+                                    let client = reqwest::Client::new();
+                                    match client
+                                        .post(&format!("{}/api/delta-sync", url_clone))
+                                        .json(&payload_clone)
+                                        .send()
+                                        .await
+                                    {
+                                        Ok(response) => {
+                                            if response.status().is_success() {
+                                                println!("Delta sync sent to enterprise blockchain");
+                                            } else {
+                                                println!("Enterprise sync failed: {}", response.status());
+                                            }
+                                        }
+                                        Err(e) => {
+                                            println!("Failed to send delta sync: {}", e);
+                                        }
+                                    }
+                                });
+                            } else {
+                                println!(" No enterprise blockchain URL configured");
+                            }
+                        }
+                        Message::ChatMessage { content, sender, timestamp } => {
+                            if let Some(network_id) = &current_network {
+                                broadcast_to_network(&networks, network_id, &peer_id, message.clone()).await;
+                                println!("📨 Chat message '{}' from {} broadcast to network {}", content, sender, network_id);
+                            }
+                        }
+                        Message::Transaction { transaction } => {
+                            if let Some(network_id) = &current_network {
+                                broadcast_to_network(&networks, network_id, &peer_id, message.clone()).await;
+                                println!("Transaction {} broadcast to network {}", transaction.id, network_id);
+                            }
                         }
                         _ => {
                             if let Some(network_id) = &current_network {
-                                handle_network_message(&networks, network_id, &peer_id, message).await;
+                                handle_network_message(&networks, network_id, &peer_id, message.clone()).await;
                             }
                         }
                     }
+                } else {
+                    println!(" Failed to parse WebSocket message: {}", text);
                 }
             }
         } else {
@@ -285,32 +484,52 @@ async fn handle_peer(ws: WebSocket, networks: Networks, global_peers: GlobalPeer
     println!("Peer {} disconnected", &peer_id[..8]);
 }
 
-async fn get_networks_info(networks: Networks) -> Result<impl warp::Reply, warp::Rejection> {
-    let networks_lock = networks.read().await;
-    let mut info = HashMap::new();
-    
-    for (network_id, peers) in networks_lock.iter() {
-        info.insert(network_id.clone(), peers.len());
+async fn handle_network_message(networks: &Networks, network_id: &str, sender_id: &str, message: Message) {
+    match message {
+        Message::Offer { target, offer } => {
+            let msg = Message::Offer { target: sender_id.to_string(), offer };
+            let _ = send_to_network_peer(networks, network_id, &target, msg).await;
+        }
+        Message::Answer { target, answer } => {
+            let msg = Message::Answer { target: sender_id.to_string(), answer };
+            let _ = send_to_network_peer(networks, network_id, &target, msg).await;
+        }
+        Message::Candidate { target, candidate } => {
+            let msg = Message::Candidate { target: sender_id.to_string(), candidate };
+            let _ = send_to_network_peer(networks, network_id, &target, msg).await;
+        }
+        _ => {}
     }
-    
-    Ok(warp::reply::json(&info))
 }
 
-async fn get_network_list(networks: Networks) -> Result<impl warp::Reply, warp::Rejection> {
+async fn broadcast_to_network(networks: &Networks, network_id: &str, sender_id: &str, message: Message) {
     let networks_lock = networks.read().await;
-    let mut network_list = Vec::new();
-    
-    for (network_id, peers) in networks_lock.iter() {
-        network_list.push(serde_json::json!({
-            "id": network_id,
-            "name": network_id,
-            "peer_count": peers.len()
-        }));
+    if let Some(network_peers) = networks_lock.get(network_id) {
+        let json = serde_json::to_string(&message).unwrap_or_default();
+        
+        for (peer_id, peer) in network_peers.iter() {
+            if peer_id != sender_id {
+                let _ = peer.sender.send(Ok(WsMessage::text(json.clone())));
+            }
+        }
     }
-    
-    network_list.sort_by(|a, b| a["name"].as_str().unwrap().cmp(b["name"].as_str().unwrap()));
-    
-    Ok(warp::reply::json(&network_list))
+}
+
+async fn send_to_peer_direct(sender: &mpsc::UnboundedSender<Result<WsMessage, warp::Error>>, message: Message) -> Result<(), Box<dyn std::error::Error>> {
+    let json = serde_json::to_string(&message)?;
+    sender.send(Ok(WsMessage::text(json)))?;
+    Ok(())
+}
+
+async fn send_to_network_peer(networks: &Networks, network_id: &str, peer_id: &str, message: Message) -> Result<(), Box<dyn std::error::Error>> {
+    let networks_lock = networks.read().await;
+    if let Some(network_peers) = networks_lock.get(network_id) {
+        if let Some(peer) = network_peers.get(peer_id) {
+            let json = serde_json::to_string(&message)?;
+            peer.sender.send(Ok(WsMessage::text(json)))?;
+        }
+    }
+    Ok(())
 }
 
 async fn get_network_peers(networks: &Networks, network_id: &str, exclude_peer: &str) -> Vec<String> {
@@ -340,58 +559,32 @@ async fn send_network_info(networks: &Networks, peer_id: &str, network_id: &str)
     Ok(())
 }
 
-async fn handle_network_message(networks: &Networks, network_id: &str, sender_id: &str, message: Message) {
-    match message {
-        Message::Offer { target, offer } => {
-            let msg = Message::Offer { target: sender_id.to_string(), offer };
-            let _ = send_to_network_peer(networks, network_id, &target, msg).await;
-        }
-        Message::Answer { target, answer } => {
-            let msg = Message::Answer { target: sender_id.to_string(), answer };
-            let _ = send_to_network_peer(networks, network_id, &target, msg).await;
-        }
-        Message::Candidate { target, candidate } => {
-            let msg = Message::Candidate { target: sender_id.to_string(), candidate };
-            let _ = send_to_network_peer(networks, network_id, &target, msg).await;
-        }
-        Message::Block { block } => {
-            broadcast_to_network(networks, network_id, sender_id, Message::Block { block }).await;
-        }
-        Message::Transaction { transaction } => {
-            broadcast_to_network(networks, network_id, sender_id, Message::Transaction { transaction }).await;
-        }
-        _ => {}
-    }
-}
-
-async fn send_to_peer_direct(sender: &mpsc::UnboundedSender<Result<WsMessage, warp::Error>>, message: Message) -> Result<(), Box<dyn std::error::Error>> {
-    let json = serde_json::to_string(&message)?;
-    sender.send(Ok(WsMessage::text(json)))?;
-    Ok(())
-}
-
-async fn send_to_network_peer(networks: &Networks, network_id: &str, peer_id: &str, message: Message) -> Result<(), Box<dyn std::error::Error>> {
+async fn get_networks_info(networks: Networks) -> Result<impl warp::Reply, warp::Rejection> {
     let networks_lock = networks.read().await;
-    if let Some(network_peers) = networks_lock.get(network_id) {
-        if let Some(peer) = network_peers.get(peer_id) {
-            let json = serde_json::to_string(&message)?;
-            peer.sender.send(Ok(WsMessage::text(json)))?;
-        }
+    let mut info = HashMap::new();
+    
+    for (network_id, peers) in networks_lock.iter() {
+        info.insert(network_id.clone(), peers.len());
     }
-    Ok(())
+    
+    Ok(warp::reply::json(&info))
 }
 
-async fn broadcast_to_network(networks: &Networks, network_id: &str, sender_id: &str, message: Message) {
+async fn get_network_list(networks: Networks) -> Result<impl warp::Reply, warp::Rejection> {
     let networks_lock = networks.read().await;
-    if let Some(network_peers) = networks_lock.get(network_id) {
-        let json = serde_json::to_string(&message).unwrap_or_default();
-        
-        for (peer_id, peer) in network_peers.iter() {
-            if peer_id != sender_id {
-                let _ = peer.sender.send(Ok(WsMessage::text(json.clone())));
-            }
-        }
+    let mut network_list = Vec::new();
+    
+    for (network_id, peers) in networks_lock.iter() {
+        network_list.push(serde_json::json!({
+            "id": network_id,
+            "name": network_id,
+            "peer_count": peers.len()
+        }));
     }
+    
+    network_list.sort_by(|a, b| a["name"].as_str().unwrap().cmp(b["name"].as_str().unwrap()));
+    
+    Ok(warp::reply::json(&network_list))
 }
 
 async fn send_network_list_update(global_peers: &GlobalPeers, peer_id: &str) -> Result<(), Box<dyn std::error::Error>> {

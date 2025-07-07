@@ -1,29 +1,28 @@
-// Shared library for both tracker and enterprise blockchain
-pub mod common;
+#[cfg(feature = "wasm")]
+use wasm_bindgen::prelude::*;
+
+pub mod blockchain;
+
+// Only include tracker and enterprise modules in native builds
+#[cfg(feature = "native")]
 pub mod tracker;
+
+#[cfg(feature = "native")]
 pub mod enterprise_bc;
 
-// Re-export commonly used types
-pub use common::{
-    blockchain::{Block as TenantBlock, Transaction, Blockchain as TenantBlockchain},
-    types::{Message, NetworkPeer},
-    crypto::hash_data,
-    time::current_timestamp,
-};
+// Re-export main types from unified blockchain
+pub use blockchain::{Blockchain, OrderBook, Block, Transaction, TransactionType};
 
-// Enterprise blockchain exports - Fixed to use correct imports
-pub use enterprise_bc::{
-    EnterpriseBlock, 
-    EnterpriseBlockchain,
-    EnterpriseTransaction,
-    TenantBlockchainUpdate,
-    TenantBlockData,
-    Validator,
-    ConsensusEngine,
-};
+// Enterprise types only for native
+#[cfg(feature = "native")]
+pub use blockchain::{TenantBlockchainUpdate, TenantBlockData};
 
-// Tracker exports  
-pub use tracker::{
-    Tracker,
-    EnterpriseIntegration,
-};
+#[cfg(feature = "native")]
+pub use tracker::Tracker;
+
+// WASM exports
+#[cfg(feature = "wasm")]
+#[wasm_bindgen(start)]
+pub fn main() {
+    console_error_panic_hook::set_once();
+}
