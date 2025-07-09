@@ -110,6 +110,9 @@ async fn handle_tenant_blockchain_update(
     })))
 }
 
+// Replace the handle_delta_sync function in src/enterprise_bc/api.rs
+// Complete corrected handle_delta_sync function in src/enterprise_bc/api.rs
+
 async fn handle_delta_sync(
     sync_payload: serde_json::Value,
     blockchain: Arc<RwLock<Blockchain>>
@@ -118,8 +121,8 @@ async fn handle_delta_sync(
 
     if let Some(sync_data) = sync_payload["sync_data"].as_object() {
         let network_id = sync_payload["network_id"].as_str().unwrap_or("unknown");
+        let peer_id = sync_payload["peer_id"].as_str().unwrap_or("unknown");
 
-        // Create longer-lived empty vectors to fix borrowing issue
         let empty_blocks = vec![];
         let empty_txs = vec![];
 
@@ -134,11 +137,96 @@ async fn handle_delta_sync(
         info!("Processing delta sync: {} new blocks, {} pending transactions from network {}",
               new_blocks.len(), pending_txs.len(), network_id);
 
+        // Store the blocks in the correct order
+        if !new_blocks.is_empty() {
+            let mut parsed_blocks = Vec::new();
+            
+            // Parse and collect all blocks
+            for block_value in new_blocks {
+                if let Ok(block) = serde_json::from_value::<crate::blockchain::Block>(block_value.clone()) {
+                    let block_height = block.height; // Get height before moving block
+                    parsed_blocks.push(block);       // Move block here
+                    info!("Parsed block #{} from network {} for processing", block_height, network_id);
+                } else {
+                    warn!("Failed to parse block from delta sync data");
+                }
+            }
+            
+            // Sort blocks by height (oldest first)
+            parsed_blocks.sort_by(|a, b| a.height.cmp(&b.height));
+            info!("Sorted {} blocks by height for sequential processing", parsed_blocks.len());
+            
+            // Get existing blocks for deduplication  
+            let existing_blocks = {
+                let bc = blockchain.read().await;
+                bc.get_recent_tenant_blocks(1000)
+            };
+            
+            let mut tenant_blocks = Vec::new();
+            
+            // Convert to TenantBlockData format with deduplication
+            for block in parsed_blocks {
+                let block_height = block.height; // Get height for logging
+                
+                // Check if this block already exists (by network_id + block_id)
+                let already_exists = existing_blocks.iter().any(|existing| {
+                    if let (Some(existing_network), Some(existing_block_id)) = 
+                       (existing.get("network_id").and_then(|v| v.as_str()),
+                        existing.get("block_id").and_then(|v| v.as_u64())) {
+                        existing_network == network_id && 
+                        existing_block_id == block.height as u64
+                    } else {
+                        false
+                    }
+                });
+                
+                if !already_exists {
+                    let tenant_block = crate::blockchain::TenantBlockData {
+                        block_id: block.height,
+                        block_hash: block.hash,
+                        transactions: block.transactions.iter().map(|tx| {
+                            // Serialize complete transaction as JSON string
+                            serde_json::to_string(tx).unwrap_or_else(|_| tx.id.clone())
+                        }).collect(),
+                        timestamp: block.timestamp,
+                        previous_hash: block.previous_hash,
+                        network_id: network_id.to_string(),
+                    };
+                    tenant_blocks.push(tenant_block);
+                    info!("✅ New block #{} from network {} - will store", block_height, network_id);
+                } else {
+                    info!("⚠️ Duplicate block #{} from network {} - skipping", block_height, network_id);
+                }
+            }
+            
+            // Store the new blocks in correct order
+            if !tenant_blocks.is_empty() {
+                let update = crate::blockchain::TenantBlockchainUpdate {
+                    network_id: network_id.to_string(),
+                    peer_id: peer_id.to_string(),
+                    new_blocks: tenant_blocks,
+                    timestamp: std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs(),
+                };
+                
+                {
+                    let mut bc = blockchain.write().await;
+                    bc.add_tenant_blocks(&update);
+                    info!("✅ Stored {} NEW blocks from delta sync in correct order", update.new_blocks.len());
+                }
+            } else {
+                info!("ℹ️ All blocks were duplicates - nothing new to store");
+            }
+        }
+
         Ok(warp::reply::json(&serde_json::json!({
             "status": "success",
-            "message": "Delta sync processed",
+            "message": "Delta sync processed and stored in correct order",
             "network_id": network_id,
             "blocks_processed": new_blocks.len(),
+            "blocks_stored": new_blocks.len(),
             "transactions_processed": pending_txs.len()
         })))
     } else {
@@ -149,7 +237,6 @@ async fn handle_delta_sync(
         })))
     }
 }
-
 async fn handle_status(
     blockchain: Arc<RwLock<Blockchain>>
 ) -> Result<impl warp::Reply, warp::Rejection> {

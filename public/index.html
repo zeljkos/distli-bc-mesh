@@ -834,23 +834,67 @@
                             updateUI();
                         }
                         break;
-                        
-                    case 'blockchain_block':
-                        // Receive mined block from peer and add to local blockchain
-                        if (message.block && blockchain) {
-			    			const receivedBlock = message.block;
-			    			const currentHeight = blockchain.get_chain_length() - 1;
-			    			// Accept blocks from other miners
-        		    		if (receivedBlock.height === currentHeight + 1) {	
-			     				if (blockchain.add_p2p_block(JSON.stringify(receivedBlock))) {
-                					log(` Synced block #${receivedBlock.height} from miner ${message.sender}`);
-                					updateUI();
-                					updateBlockchain();
-								}
-							}
-                        }
-                        break;
-                        
+                    // Replace the 'blockchain_block' case in handleP2PMessage to prevent forwarding
+
+case 'blockchain_block':
+    log(`🔍 Received blockchain_block from ${fromPeer.substring(0, 8)}`);
+
+    if (message.block && blockchain) {
+        const receivedBlock = message.block;
+        const currentHeight = blockchain.get_chain_length() - 1;
+        const latestBlock = JSON.parse(blockchain.get_latest_block_json());
+
+        log(`📊 Block validation check:`);
+        log(`  - Received block height: ${receivedBlock.height}`);
+        log(`  - Current chain height: ${currentHeight}`);
+        log(`  - Block validator: ${receivedBlock.validator}`);
+        log(`  - Our latest hash: ${latestBlock.hash}`);
+        log(`  - Block previous hash: ${receivedBlock.previous_hash}`);
+
+        // Auto-add unknown validators
+        if (receivedBlock.validator && receivedBlock.validator !== 'genesis') {
+            try {
+                blockchain.add_validator(receivedBlock.validator, receivedBlock.stake_weight || 1000);
+                log(`✅ Auto-added validator ${receivedBlock.validator.substring(0, 8)} with stake ${receivedBlock.stake_weight || 1000}`);
+            } catch (e) {
+                log(`ℹ️ Validator ${receivedBlock.validator.substring(0, 8)} already exists`);
+            }
+        }
+
+        if (receivedBlock.height === currentHeight + 1) {
+            log(`✅ Block height valid, attempting to add to chain`);
+
+            try {
+                if (blockchain.add_p2p_block(JSON.stringify(receivedBlock))) {
+                    log(`✅ Successfully synced block #${receivedBlock.height} from miner ${message.sender}`);
+
+                    if (receivedBlock.transactions && receivedBlock.transactions.length > 0) {
+                        log(`📋 Block contained ${receivedBlock.transactions.length} transactions`);
+                        receivedBlock.transactions.forEach((tx, i) => {
+                            if (tx.tx_type && tx.tx_type.Message) {
+                                log(`  ${i+1}. Message: "${tx.tx_type.Message.content}"`);
+                            }
+                        });
+                    }
+
+                    // 🚨 CRITICAL FIX: Do NOT forward received blocks to tracker
+                    // Only the original miner should send blocks to tracker
+                    log(`ℹ️ Block received via P2P - not forwarding to tracker (preventing duplicates)`);
+
+                    updateUI();
+                    updateBlockchain();
+                } else {
+                    log(`❌ Still failed to add block #${receivedBlock.height}`);
+                    log(`🔍 Hash comparison: ${receivedBlock.previous_hash === latestBlock.hash ? 'MATCH' : 'NO MATCH'}`);
+                }
+            } catch (error) {
+                log(`❌ Error adding P2P block: ${error.message}`);
+            }
+        } else {
+            log(`❌ Block height invalid - expected ${currentHeight + 1}, got ${receivedBlock.height}`);
+        }
+    }
+    break;    
                     case 'sync_request':
                         // Peer is requesting our blockchain state
                         this.sendBlockchainSync(fromPeer);
@@ -1251,37 +1295,92 @@
         };
 
 // Update the mine button to only work if you have pending transactions
+// Enhanced mineBlock function with detailed P2P debugging
 window.mineBlock = function() {
     try {
         const pendingCount = blockchain.get_pending_count();
         if (pendingCount === 0) {
-            log('No pending transactions to mine - only transaction creators can mine');
+            log('No pending transactions to mine');
             return false;
         }
         
         const success = blockchain.mine_block();
         if (success) {
-            log('Block mined successfully using Proof of Stake');
+            log(' Block mined successfully using Proof of Stake');
             
             const newBlock = JSON.parse(blockchain.get_latest_block_json());
+            log(` New block #${newBlock.height} created with ${newBlock.transactions.length} transactions`);
             
-            // Broadcast the completed block to sync with other nodes
+            // Debug P2P connections
+			log(`🔍 Tracker Debug:`);
+			log(`  - mesh exists: ${!!mesh}`);
+			log(`  - mesh.connected: ${mesh ? mesh.connected : 'N/A'}`);
+			log(`  - mesh.currentNetwork: ${mesh ? mesh.currentNetwork : 'N/A'}`);
+			log(`  - WebSocket readyState: ${mesh && mesh.ws ? mesh.ws.readyState : 'N/A'}`); 
+
+			  // Send to tracker with enhanced logging
+    if (mesh && mesh.connected && mesh.currentNetwork) {
+        log(`📤 Attempting to send block #${newBlock.height} to tracker...`);
+        try {
+            mesh.send({
+                type: 'block',
+                block: newBlock
+            });
+            log(`✅ Block #${newBlock.height} sent to tracker successfully`);
+        } catch (error) {
+            log(`❌ Failed to send block to tracker: ${error.message}`);
+        }
+    } else {
+        log(`❌ Cannot send to tracker:`);
+        log(`  - No mesh: ${!mesh}`);
+        log(`  - Not connected: ${mesh && !mesh.connected}`); 
+        log(`  - No network: ${mesh && !mesh.currentNetwork}`);
+    }
+
+
             if (mesh) {
-                mesh.broadcastToP2P({
-                    type: 'blockchain_block',
-                    block: newBlock,
-                    sender: getUserId()
-                });
-                log('📤 Block #' + newBlock.height + ' broadcast for sync');
-            }
-            
-            // Send to tracker
-            if (mesh && mesh.connected && mesh.currentNetwork) {
-                mesh.send({
-                    type: 'block',
-                    block: newBlock
-                });
-                log('📤 Block #' + newBlock.height + ' sent to tracker');
+                const connectedPeers = mesh.dataChannels.size;
+                log(`P2P Debug: ${connectedPeers} connected peers`);
+                
+                // List connected peers
+                for (const [peerId, channel] of mesh.dataChannels) {
+                    log(`  - Peer ${peerId.substring(0, 8)}: ${channel.readyState}`);
+                }
+                
+                if (connectedPeers > 0) {
+                    log(`📤 Broadcasting block #${newBlock.height} to ${connectedPeers} P2P peers`);
+                    
+                    const blockMessage = {
+                        type: 'blockchain_block',
+                        block: newBlock,
+                        sender: getUserId()
+                    };
+                    
+                    let broadcastCount = 0;
+                    for (const [peerId, channel] of mesh.dataChannels) {
+                        if (channel.readyState === 'open') {
+                            try {
+                                channel.send(JSON.stringify(blockMessage));
+                                broadcastCount++;
+                                log(`  ✅ Sent block to peer ${peerId.substring(0, 8)}`);
+                            } catch (error) {
+                                log(`  ❌ Failed to send to peer ${peerId.substring(0, 8)}: ${error.message}`);
+                            }
+                        } else {
+                            log(`  ⚠️ Peer ${peerId.substring(0, 8)} channel not open: ${channel.readyState}`);
+                        }
+                    }
+                    
+                    if (broadcastCount > 0) {
+                        log(`📤 Block #${newBlock.height} sent to ${broadcastCount} peers`);
+                    } else {
+                        log(`❌ Block not sent to any peers - all channels unavailable`);
+                    }
+                } else {
+                    log('⚠️ No P2P peers connected - block not broadcast');
+                }
+            } else {
+                log('❌ No mesh network available - block not broadcast');
             }
             
             updateUI();
@@ -1290,7 +1389,7 @@ window.mineBlock = function() {
         }
         return false;
     } catch (error) {
-        log('Error mining block: ' + error.message);
+        log('❌ Error mining block: ' + error.message);
         return false;
     }
 };

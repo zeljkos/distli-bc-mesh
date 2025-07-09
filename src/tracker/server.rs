@@ -237,6 +237,7 @@ async fn handle_blockchain_sync(
 async fn send_block_to_enterprise(block: &Block, network_id: &str, peer_id: &str) {
     if let Some(enterprise_url) = std::env::var("ENTERPRISE_BC_URL").ok() {
         println!(" Converting P2P block to enterprise format for network: {}", network_id);
+        println!("INDIVIDUAL BLOCK PATH: Sending block #{} from network {}", block.height, network_id);
         
         // Convert Block to TenantBlockData with FULL transaction data
         let tenant_block = TenantBlockData {
@@ -397,7 +398,7 @@ async fn handle_peer(
                             }
                         }
                         Message::EnterpriseSync { network_id, sync_data } => {
-                            println!("Received enterprise sync request from network: {}", network_id);
+                            println!("DELTA SYNC PATH: Sending sync data from network {}", network_id);
 
                             if let Some(url) = std::env::var("ENTERPRISE_BC_URL").ok() {
                                 let sync_payload = serde_json::json!({
