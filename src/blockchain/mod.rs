@@ -120,6 +120,7 @@ pub struct Blockchain {
     #[cfg(feature = "native")]
     contracts: HashMap<String, SmartContract>,
     #[cfg(feature = "native")]
+    #[cfg(feature = "native")]
     tenant_blocks: Vec<TenantBlockData>,
 }
 
@@ -137,6 +138,7 @@ impl Blockchain {
             storage_path: None,
             #[cfg(feature = "native")]
             contracts: HashMap::new(),
+            #[cfg(feature = "native")]
             #[cfg(feature = "native")]
             tenant_blocks: Vec::new(),
         };
@@ -595,6 +597,7 @@ impl Blockchain {
 
     // Enterprise methods (native only)
     #[cfg(feature = "native")]
+    #[cfg(feature = "native")]
     pub fn add_tenant_blocks(&mut self, update: &TenantBlockchainUpdate) {
         for block in &update.new_blocks {
             self.tenant_blocks.push(block.clone());
@@ -606,6 +609,7 @@ impl Blockchain {
         }
     }
 
+    #[cfg(feature = "native")]
     #[cfg(feature = "native")]
     pub fn get_recent_tenant_blocks(&self, limit: usize) -> Vec<serde_json::Value> {
         let start_idx = if self.tenant_blocks.len() > limit {
@@ -626,6 +630,7 @@ impl Blockchain {
         }).collect()
     }
 
+    #[cfg(feature = "native")]
     #[cfg(feature = "native")]
     pub fn get_tenant_summaries(&self) -> Vec<serde_json::Value> {
         let mut network_stats: std::collections::HashMap<String, (usize, usize, u64)> = std::collections::HashMap::new();
