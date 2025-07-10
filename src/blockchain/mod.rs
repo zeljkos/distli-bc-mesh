@@ -120,8 +120,6 @@ pub struct Blockchain {
     #[cfg(feature = "native")]
     contracts: HashMap<String, SmartContract>,
     #[cfg(feature = "native")]
-    #[cfg(feature = "native")]
-    #[cfg(feature = "native")]
     tenant_blocks: Vec<TenantBlockData>,
 }
 
@@ -139,8 +137,6 @@ impl Blockchain {
             storage_path: None,
             #[cfg(feature = "native")]
             contracts: HashMap::new(),
-            #[cfg(feature = "native")]
-            #[cfg(feature = "native")]
             #[cfg(feature = "native")]
             tenant_blocks: Vec::new(),
         };
