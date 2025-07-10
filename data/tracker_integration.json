@@ -1,5 +1,9 @@
 {
   "last_reported_state": {
+    "my_net_0": {
+      "last_reported_block_id": 1,
+      "last_update": 1752149083
+    },
     "net": {
       "last_reported_block_id": 1,
       "last_update": 1752129282
@@ -7,9 +11,33 @@
     "network_0": {
       "last_reported_block_id": 1,
       "last_update": 1752147142
+    },
+    "test": {
+      "last_reported_block_id": 1,
+      "last_update": 1752149361
+    },
+    "test_net": {
+      "last_reported_block_id": 1,
+      "last_update": 1752149542
     }
   },
   "network_blockchain_state": {
+    "my_net_0": {
+      "blocks": [
+        {
+          "block_hash": "633b63545fdf525a9a4c1ff248a474206508e8c783360f276eb18dfb8658cf4a",
+          "block_id": 1,
+          "network_id": "my_net_0",
+          "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+          "timestamp": 1752149083,
+          "transactions": [
+            "msg_1752149083"
+          ]
+        }
+      ],
+      "last_block_id": 1,
+      "last_update": 1752149083
+    },
     "net": {
       "blocks": [
         {
@@ -41,6 +69,38 @@
       ],
       "last_block_id": 1,
       "last_update": 1752147142
+    },
+    "test": {
+      "blocks": [
+        {
+          "block_hash": "d4dec33be41f795386041a4836b50183118a1c4154d2a5c8ef4a072773ad428a",
+          "block_id": 1,
+          "network_id": "test",
+          "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+          "timestamp": 1752149361,
+          "transactions": [
+            "msg_1752149361"
+          ]
+        }
+      ],
+      "last_block_id": 1,
+      "last_update": 1752149884
+    },
+    "test_net": {
+      "blocks": [
+        {
+          "block_hash": "4107eb77c76e2a064c88500f4e8ddef496cb4b55582917540e379cbc60b3257d",
+          "block_id": 1,
+          "network_id": "test_net",
+          "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+          "timestamp": 1752149542,
+          "transactions": [
+            "msg_1752149542"
+          ]
+        }
+      ],
+      "last_block_id": 1,
+      "last_update": 1752149542
     }
   }
 }

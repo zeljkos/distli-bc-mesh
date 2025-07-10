@@ -1,6 +1,4 @@
-// Simplified app.js - Replaces main.js, blockchain-ui.js, mesh-manager.js, trading.js, wasm-loader.js
-// Reduced from 1500+ lines to ~400 lines
-
+// Simplified app.js - Pure JavaScript with WASM blockchain
 import init, { Blockchain, OrderBook } from '../pkg/distli_mesh_bc.js';
 
 class DistliApp {
@@ -22,20 +20,15 @@ class DistliApp {
 
     async init() {
         try {
-            // Initialize WASM
             await init();
             this.blockchain = new Blockchain();
             this.orderBook = new OrderBook();
-            
-            // Add initial validator
             this.blockchain.add_validator(this.userId, 1000);
             
-            // Setup UI
             this.setupEventListeners();
             this.setupDefaultServer();
             this.updateUI();
             
-            // Start update loop
             setInterval(() => this.updateUI(), 2000);
             
             console.log('App initialized');
@@ -46,7 +39,6 @@ class DistliApp {
     }
 
     setupEventListeners() {
-        // Connect button
         document.getElementById('connect-btn')?.addEventListener('click', () => {
             if (this.connected) {
                 this.disconnect();
@@ -55,24 +47,20 @@ class DistliApp {
             }
         });
 
-        // Network buttons
         document.getElementById('join-network-btn')?.addEventListener('click', () => this.joinNetwork());
         document.getElementById('refresh-networks-btn')?.addEventListener('click', () => this.refreshNetworks());
         document.getElementById('discover-btn')?.addEventListener('click', () => this.discoverPeers());
         document.getElementById('connect-all-btn')?.addEventListener('click', () => this.connectAllPeers());
 
-        // Message
         document.getElementById('message-btn')?.addEventListener('click', () => this.sendMessage());
         document.getElementById('message-input')?.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') this.sendMessage();
         });
 
-        // Trading
         document.querySelector('.btn-buy')?.addEventListener('click', () => this.placeBuyOrder());
         document.querySelector('.btn-sell')?.addEventListener('click', () => this.placeSellOrder());
         document.querySelector('.refresh-btn')?.addEventListener('click', () => this.updateOrderBook());
 
-        // Tabs
         document.querySelectorAll('.tab').forEach(tab => {
             tab.addEventListener('click', (e) => this.showTab(this.getTabName(e.target.textContent)));
         });
@@ -94,7 +82,6 @@ class DistliApp {
         return 'messaging';
     }
 
-    // Connection Management
     async connect() {
         const server = document.getElementById('server-input')?.value?.trim() || `${window.location.hostname}:3030`;
         const wsUrl = `ws://${server}/ws`;
@@ -144,7 +131,10 @@ class DistliApp {
                 break;
             case 'peers':
                 this.availablePeers = message.peers;
+                this.connectAllPeers();
                 this.updateUI();
+                // Request sync from existing peers
+                setTimeout(() => this.requestSync(), 2000);
                 break;
             case 'offer':
                 this.handleOffer(message.target, message.offer);
@@ -156,7 +146,9 @@ class DistliApp {
                 this.handleCandidate(message.target, message.candidate);
                 break;
             case 'block':
-                this.handleP2PBlock(message.block);
+                if (message.block && message.block.height) {
+                    this.handleP2PBlock(message.block);
+                }
                 break;
         }
     }
@@ -167,11 +159,11 @@ class DistliApp {
         }
     }
 
-    // Network Management
     joinNetwork() {
         const networkId = this.getSelectedNetwork();
         if (networkId && this.connected) {
             this.send({ type: 'join_network', network_id: networkId });
+            setTimeout(() => this.discoverPeers(), 1000);
         }
     }
 
@@ -197,7 +189,6 @@ class DistliApp {
         const select = document.getElementById('network-select');
         if (!select) return;
         
-        // Clear existing options except first
         while (select.children.length > 1) {
             select.removeChild(select.lastChild);
         }
@@ -224,7 +215,6 @@ class DistliApp {
         }
     }
 
-    // WebRTC P2P
     async connectToPeer(peerId) {
         try {
             const pc = new RTCPeerConnection(this.rtcConfig);
@@ -249,19 +239,49 @@ class DistliApp {
     }
 
     setupDataChannel(channel, peerId) {
+        console.log('=== SETTING UP DATA CHANNEL ===');
+        console.log('Peer ID:', peerId.substring(0,8));
+        
         channel.onopen = () => {
+            console.log('DATA CHANNEL OPENED for peer:', peerId.substring(0,8));
             this.dataChannels.set(peerId, channel);
             this.updateUI();
+            
+            // Send current blockchain state when connection opens
+            if (this.blockchain) {
+                const chainLength = this.blockchain.get_chain_length();
+                console.log('Our chain length:', chainLength);
+                if (chainLength > 1) {
+                    const latestBlockJson = this.blockchain.get_latest_block_json();
+                    if (latestBlockJson && latestBlockJson !== '{}') {
+                        const latestBlock = JSON.parse(latestBlockJson);
+                        console.log('Sending our latest block to new peer:', latestBlock.height);
+                        setTimeout(() => {
+                            this.sendToP2PPeer(peerId, {
+                                type: 'blockchain_block',
+                                block: latestBlock,
+                                sender: this.userId
+                            });
+                        }, 1000);
+                    }
+                }
+            }
         };
         
         channel.onclose = () => {
+            console.log('DATA CHANNEL CLOSED for peer:', peerId.substring(0,8));
             this.dataChannels.delete(peerId);
             this.updateUI();
         };
         
         channel.onmessage = (event) => {
-            const message = JSON.parse(event.data);
-            this.handleP2PMessage(message, peerId);
+            console.log('DATA CHANNEL MESSAGE from peer:', peerId.substring(0,8));
+            try {
+                const message = JSON.parse(event.data);
+                this.handleP2PMessage(message, peerId);
+            } catch (error) {
+                console.error('Failed to parse P2P message:', error);
+            }
         };
     }
 
@@ -312,69 +332,183 @@ class DistliApp {
         }
     }
 
+    requestSync() {
+        this.broadcastToP2P({
+            type: 'sync_request',
+            current_height: this.blockchain.get_chain_length() - 1,
+            sender: this.userId
+        });
+    }
+
     handleP2PMessage(message, fromPeer) {
+        console.log('=== RECEIVED P2P MESSAGE ===');
+        console.log('From peer:', fromPeer.substring(0,8));
+        console.log('Message type:', message.type);
+        console.log('Sender:', message.sender?.substring(0,8));
+        console.log('My ID:', this.userId.substring(0,8));
+        
         if (message.type === 'blockchain_block' && message.sender !== this.userId) {
+            console.log('Processing blockchain block from peer');
             this.handleP2PBlock(message.block);
+        }
+        else if (message.type === 'sync_request' && message.sender !== this.userId) {
+            console.log('Processing sync request from peer');
+            const ourHeight = this.blockchain.get_chain_length() - 1;
+            if (ourHeight > message.current_height) {
+                const latestBlockJson = this.blockchain.get_latest_block_json();
+                if (latestBlockJson && latestBlockJson !== '{}') {
+                    const latestBlock = JSON.parse(latestBlockJson);
+                    this.sendToP2PPeer(fromPeer, {
+                        type: 'blockchain_block',
+                        block: latestBlock,
+                        sender: this.userId
+                    });
+                    console.log('Sent sync response to peer');
+                }
+            }
+        }
+        else {
+            console.log('IGNORED message (same sender or different type)');
         }
     }
 
     handleP2PBlock(block) {
-        if (!block || block.height <= 0) return;
+        console.log('=== PROCESSING P2P BLOCK ===');
+        console.log('Block:', block);
+        
+        if (!block || !block.height) {
+            console.log('REJECTED: Invalid block');
+            return;
+        }
         
         try {
             const currentHeight = this.blockchain.get_chain_length() - 1;
+            console.log('Current height:', currentHeight);
+            console.log('Block height:', block.height);
+            
             if (block.height === currentHeight + 1) {
+                console.log('ACCEPTING: Block is next in sequence');
+                
+                // Add the block's validator if we don't know them
+                if (block.validator && block.stake_weight) {
+                    try {
+                        this.blockchain.add_validator(block.validator, block.stake_weight);
+                        console.log('Added validator:', block.validator.substring(0,8));
+                    } catch (e) {
+                        console.log('Validator already exists or failed to add');
+                    }
+                }
+                
                 const success = this.blockchain.add_p2p_block(JSON.stringify(block));
+                console.log('WASM add_p2p_block result:', success);
                 if (success) {
-                    console.log('Synced block #' + block.height);
+                    console.log('SUCCESS: Block added to blockchain');
                     this.updateUI();
+                } else {
+                    console.log('FAILED: WASM rejected the block');
                 }
             }
+            else if (block.height > currentHeight + 1) {
+                console.log('ACCEPTING: Block from future (we are behind)');
+                
+                // Add the block's validator if we don't know them
+                if (block.validator && block.stake_weight) {
+                    try {
+                        this.blockchain.add_validator(block.validator, block.stake_weight);
+                        console.log('Added validator:', block.validator.substring(0,8));
+                    } catch (e) {
+                        console.log('Validator already exists or failed to add');
+                    }
+                }
+                
+                const success = this.blockchain.add_p2p_block(JSON.stringify(block));
+                console.log('WASM add_p2p_block result:', success);
+                if (success) {
+                    console.log('SUCCESS: Future block added');
+                    this.updateUI();
+                } else {
+                    console.log('FAILED: WASM rejected future block');
+                }
+            }
+            else {
+                console.log('REJECTED: Block height too low');
+            }
         } catch (error) {
-            console.error('Error processing P2P block:', error);
+            console.error('ERROR processing P2P block:', error);
         }
     }
 
+    sendToP2PPeer(peerId, message) {
+        const channel = this.dataChannels.get(peerId);
+        if (channel && channel.readyState === 'open') {
+            try {
+                channel.send(JSON.stringify(message));
+                return true;
+            } catch (error) {
+                console.error('Failed to send to peer:', error);
+            }
+        }
+        return false;
+    }
+
     broadcastToP2P(message) {
+        console.log('=== BROADCASTING TO P2P ===');
+        console.log('Message type:', message.type);
+        console.log('Total channels:', this.dataChannels.size);
+        
         let sent = 0;
         for (const [peerId, channel] of this.dataChannels) {
+            console.log('Peer:', peerId.substring(0,8), 'Channel state:', channel.readyState);
             if (channel.readyState === 'open') {
                 try {
                     channel.send(JSON.stringify(message));
                     sent++;
+                    console.log('SUCCESS sent to:', peerId.substring(0,8));
                 } catch (error) {
-                    console.error('Failed to send to peer:', error);
+                    console.error('FAILED to send to peer:', peerId.substring(0,8), error);
                 }
+            } else {
+                console.log('SKIPPED peer (not open):', peerId.substring(0,8));
             }
         }
+        console.log('Broadcast complete:', sent, 'successful');
         return sent;
     }
 
-    // Messaging
     sendMessage() {
         const input = document.getElementById('message-input');
         const messageText = input?.value?.trim();
         if (!messageText) return;
 
+        console.log('=== SENDING MESSAGE ===');
+        console.log('Message:', messageText);
+        console.log('Connected peers:', this.dataChannels.size);
+
         try {
             this.blockchain.add_message(messageText, this.userId);
             const success = this.blockchain.mine_block();
+            console.log('Mine result:', success);
             
             if (success) {
                 const latestBlockJson = this.blockchain.get_latest_block_json();
+                console.log('Latest block JSON:', latestBlockJson);
+                
                 if (latestBlockJson && latestBlockJson !== '{}') {
                     const minedBlock = JSON.parse(latestBlockJson);
+                    console.log('Mined block:', minedBlock);
                     
-                    // Broadcast to P2P
-                    this.broadcastToP2P({
+                    const p2pMessage = {
                         type: 'blockchain_block',
                         block: minedBlock,
                         sender: this.userId
-                    });
+                    };
                     
-                    // Send to tracker
+                    const sent = this.broadcastToP2P(p2pMessage);
+                    console.log('P2P broadcast result:', sent, 'peers');
+                    
                     if (this.connected) {
                         this.send({ type: 'block', block: minedBlock });
+                        console.log('Sent to tracker');
                     }
                 }
             }
@@ -387,7 +521,6 @@ class DistliApp {
         }
     }
 
-    // Trading
     placeBuyOrder() {
         const asset = document.getElementById('buy-asset')?.value;
         const quantity = parseFloat(document.getElementById('buy-quantity')?.value) || 0;
@@ -505,10 +638,8 @@ class DistliApp {
         `).join('');
     }
 
-    // UI Management
     updateUI() {
         this.updateConnectionStatus();
-        this.updateStats();
         this.updateButtonStates();
         this.updateBlockchainDisplay();
     }
@@ -523,10 +654,6 @@ class DistliApp {
         if (blockCount && this.blockchain) blockCount.textContent = this.blockchain.get_chain_length();
         if (networkName) networkName.textContent = this.currentNetwork || 'None';
         if (status) status.textContent = this.connected ? 'Connected' : 'Offline';
-    }
-
-    updateStats() {
-        // Update any additional stats displays
     }
 
     updateButtonStates() {
@@ -621,7 +748,6 @@ class DistliApp {
     }
 
     showTab(tabName) {
-        // Hide all tabs
         document.querySelectorAll('.tab-panel').forEach(panel => {
             panel.classList.remove('active');
         });
@@ -629,11 +755,9 @@ class DistliApp {
             tab.classList.remove('active');
         });
         
-        // Show selected tab
         const selectedPanel = document.getElementById(tabName);
         if (selectedPanel) selectedPanel.classList.add('active');
         
-        // Find and activate tab button
         document.querySelectorAll('.tab').forEach(tab => {
             const tabText = tab.textContent.trim();
             if ((tabName === 'messaging' && tabText.includes('Messaging')) ||
@@ -649,12 +773,11 @@ class DistliApp {
     }
 }
 
-// Initialize app when DOM loads
 document.addEventListener('DOMContentLoaded', async () => {
     try {
         const app = new DistliApp();
         await app.init();
-        window.app = app; // For debugging
+        window.app = app;
         console.log('App ready');
     } catch (error) {
         console.error('Failed to start app:', error);
@@ -662,7 +785,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 });
 
-// Make functions globally available for HTML onclick handlers
 window.sendMessage = () => window.app?.sendMessage();
 window.placeBuyOrder = () => window.app?.placeBuyOrder();
 window.placeSellOrder = () => window.app?.placeSellOrder();
