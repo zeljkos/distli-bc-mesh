@@ -313,7 +313,6 @@ const DASHBOARD_HTML: &str = r#"
                 console.error('Error loading validator status:', error);
             }
         }
-
         function parseTransactionData(txString) {
             try {
                 const tx = JSON.parse(txString);
@@ -326,9 +325,16 @@ const DASHBOARD_HTML: &str = r#"
                         class: 'transaction-type message'
                     };
                 } else if (tx.tx_type && tx.tx_type.Trading) {
+                    const trading = tx.tx_type.Trading;
+                    const quantity = (trading.quantity / 100).toFixed(2);
+                    const price = (trading.price / 100).toFixed(2);
+                    
+                    // Determine order type
+                    const orderType = tx.to === "trading_contract" ? "BUY" : "SELL";
+                    
                     typeInfo = {
-                        type: 'Trading',
-                        content: `${tx.tx_type.Trading.quantity} ${tx.tx_type.Trading.asset} @ ${tx.tx_type.Trading.price}`,
+                        type: `${orderType} Order`,
+                        content: `${orderType} ORDER: ${quantity} ${trading.asset} @ $${price}`,
                         class: 'transaction-type trading'
                     };
                 } else if (tx.tx_type === 'Transfer') {
@@ -341,14 +347,12 @@ const DASHBOARD_HTML: &str = r#"
                 
                 return { tx, typeInfo };
             } catch (e) {
-                // If parsing fails, treat as transaction ID
                 return {
                     tx: { id: txString, from: 'unknown', to: 'unknown', amount: 0 },
                     typeInfo: { type: 'Raw ID', content: txString, class: 'transaction-type' }
                 };
             }
         }
-
         async function loadBlocksWithDetails() {
             try {
                 const response = await fetch(`${API_BASE}/api/blocks?limit=10`);

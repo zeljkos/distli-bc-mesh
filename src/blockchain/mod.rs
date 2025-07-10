@@ -302,55 +302,62 @@ impl Blockchain {
     }
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
-    pub fn call_contract_buy(&mut self, asset: String, quantity: f64, price: f64, sender: String) -> String {
-        let tx_id = format!("buy_{}", Self::current_timestamp());
-        let quantity_u64 = quantity as u64;  // Convert f64 to u64
-        let price_u64 = price as u64;        // Convert f64 to u64
-        let tx = Transaction {
-            id: tx_id.clone(),
-            from: sender,
-            to: "trading_contract".to_string(),
-            amount: (price * quantity) as u64,
-            tx_type: TransactionType::Trading { 
-                asset: asset.clone(), 
-                quantity: quantity_u64, 
-                price: price_u64 
-            },
-            timestamp: Self::current_timestamp(),
-        };
-        self.pending_transactions.push(tx);
-        #[cfg(feature = "native")]
-        self.save_to_disk();
-        
-        format!("{{\"status\": \"success\", \"message\": \"Buy order placed: {} {} @ {}\", \"orderId\": \"{}\"}}", 
-                quantity, asset, price, tx_id)
-    }
+pub fn call_contract_buy(&mut self, asset: String, quantity: f64, price: f64, sender: String) -> String {
+    let tx_id = format!("buy_{}", Self::current_timestamp());
+    let quantity_u64 = quantity as u64;  // Convert f64 to u64
+    let price_u64 = price as u64;        // Convert f64 to u64
+    
+    // Calculate amount correctly - price and quantity are already in cents
+    let amount = (quantity_u64 * price_u64) / 100; // Divide by 100 to get actual dollar amount
+    
+    let tx = Transaction {
+        id: tx_id.clone(),
+        from: sender,
+        to: "trading_contract".to_string(),
+        amount, // Use corrected amount
+        tx_type: TransactionType::Trading { 
+            asset: asset.clone(), 
+            quantity: quantity_u64, 
+            price: price_u64 
+        },
+        timestamp: Self::current_timestamp(),
+    };
+    self.pending_transactions.push(tx);
+    #[cfg(feature = "native")]
+    self.save_to_disk();
+    
+    format!("{{\"status\": \"success\", \"message\": \"Buy order placed: {} {} @ {}\", \"orderId\": \"{}\"}}", 
+            quantity, asset, price, tx_id)
+}
 
-    #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
-    pub fn call_contract_sell(&mut self, asset: String, quantity: f64, price: f64, sender: String) -> String {
-        let tx_id = format!("sell_{}", Self::current_timestamp());
-        let quantity_u64 = quantity as u64;  // Convert f64 to u64
-        let price_u64 = price as u64;        // Convert f64 to u64
-        let tx = Transaction {
-            id: tx_id.clone(),
-            from: sender,
-            to: "trading_contract".to_string(),
-            amount: (price * quantity) as u64,
-            tx_type: TransactionType::Trading { 
-                asset: asset.clone(), 
-                quantity: quantity_u64, 
-                price: price_u64 
-            },
-            timestamp: Self::current_timestamp(),
-        };
-        self.pending_transactions.push(tx);
-        #[cfg(feature = "native")]
-        self.save_to_disk();
-        
-        format!("{{\"status\": \"success\", \"message\": \"Sell order placed: {} {} @ {}\", \"orderId\": \"{}\"}}", 
-                quantity, asset, price, tx_id)
-    }
-
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
+pub fn call_contract_sell(&mut self, asset: String, quantity: f64, price: f64, sender: String) -> String {
+    let tx_id = format!("sell_{}", Self::current_timestamp());
+    let quantity_u64 = quantity as u64;  // Convert f64 to u64
+    let price_u64 = price as u64;        // Convert f64 to u64
+    
+    // Calculate amount correctly - price and quantity are already in cents
+    let amount = (quantity_u64 * price_u64) / 100; // Divide by 100 to get actual dollar amount
+    
+    let tx = Transaction {
+        id: tx_id.clone(),
+        from: sender,
+        to: "trading_contract".to_string(),
+        amount, // Use corrected amount
+        tx_type: TransactionType::Trading { 
+            asset: asset.clone(), 
+            quantity: quantity_u64, 
+            price: price_u64 
+        },
+        timestamp: Self::current_timestamp(),
+    };
+    self.pending_transactions.push(tx);
+    #[cfg(feature = "native")]
+    self.save_to_disk();
+    
+    format!("{{\"status\": \"success\", \"message\": \"Sell order placed: {} {} @ {}\", \"orderId\": \"{}\"}}", 
+            quantity, asset, price, tx_id)
+}
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
     pub fn get_contract_order_book(&self) -> String {
         let mut buy_orders = Vec::new();
