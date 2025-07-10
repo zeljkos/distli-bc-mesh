@@ -533,7 +533,8 @@ class DistliApp {
             const priceInt = Math.floor(price * 100);
 
             this.orderBook.place_buy_order(this.userId, asset, quantityInt, priceInt);
-            this.blockchain.call_contract_buy(asset, quantity, price, this.userId);
+            // Fix: Pass the integer values to blockchain, not the float values
+            this.blockchain.call_contract_buy(asset, quantityInt, priceInt, this.userId);
             this.blockchain.mine_block();
 
             this.clearBuyForm();
@@ -557,7 +558,8 @@ class DistliApp {
             const priceInt = Math.floor(price * 100);
 
             this.orderBook.place_sell_order(this.userId, asset, quantityInt, priceInt);
-            this.blockchain.call_contract_sell(asset, quantity, price, this.userId);
+            // Fix: Pass the integer values to blockchain, not the float values
+            this.blockchain.call_contract_sell(asset, quantityInt, priceInt, this.userId);
             this.blockchain.mine_block();
 
             this.clearSellForm();

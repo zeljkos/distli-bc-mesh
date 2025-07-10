@@ -1,5 +1,9 @@
 {
   "last_reported_state": {
+    "BTC": {
+      "last_reported_block_id": 1,
+      "last_update": 1752150471
+    },
     "my_net_0": {
       "last_reported_block_id": 1,
       "last_update": 1752149083
@@ -22,6 +26,22 @@
     }
   },
   "network_blockchain_state": {
+    "BTC": {
+      "blocks": [
+        {
+          "block_hash": "b0cfd1f41c8d647296d2d3d55abfd82344ab3a0b00d762ef3be5e498585b7a25",
+          "block_id": 1,
+          "network_id": "BTC",
+          "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+          "timestamp": 1752150471,
+          "transactions": [
+            "msg_1752150471"
+          ]
+        }
+      ],
+      "last_block_id": 1,
+      "last_update": 1752150471
+    },
     "my_net_0": {
       "blocks": [
         {
