@@ -1,3 +1,10 @@
+how to build:
+1. cargo build --features native
+2. ./build-wasm.sh
+3. tracker: ENTERPRISE_BC_URL="http://192.168.200.133:8080" cargo run --bin tracker --features native
+4. validar: (single or docker when using multiple)  TRACKER_URL="http://192.168.200.132:3030" cargo run --bin enterprise-validator --features native -- --id validator1 --port 8080 --stake 1000
+5. cargo run --bin enterprise-dashboard --features native -- --port 9090
+
 # distli-mesh-bc
 
 A simple multi-tenant distributed blockchain mesh network using WebRTC for peer-to-peer communication.

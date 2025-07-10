@@ -3,1564 +3,267 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Distli Mesh BC - Rust WASM</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-            background: #f5f5f5;
-        }
-        .container {
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .status {
-            display: flex;
-            gap: 20px;
-            margin-bottom: 20px;
-        }
-        .stat {
-            padding: 10px;
-            background: #e9ecef;
-            border-radius: 4px;
-            text-align: center;
-        }
-        .stat strong {
-            display: block;
-            font-size: 18px;
-            color: #007bff;
-        }
-        button {
-            background: #007bff;
-            color: white;
-            border: none;
-            padding: 10px 15px;
-            border-radius: 4px;
-            cursor: pointer;
-            margin-right: 10px;
-        }
-        button:hover {
-            background: #0056b3;
-        }
-        button:disabled {
-            background: #6c757d;
-            cursor: not-allowed;
-        }
-        input[type="text"], input[type="number"], select {
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            margin-right: 10px;
-        }
-        .log {
-            background: #f8f9fa;
-            border: 1px solid #dee2e6;
-            padding: 10px;
-            border-radius: 4px;
-            height: 200px;
-            overflow-y: auto;
-            font-family: monospace;
-            font-size: 12px;
-        }
-        .block {
-            background: #e3f2fd;
-            border-left: 4px solid #2196f3;
-            padding: 10px;
-            margin: 10px 0;
-        }
-        .block-header {
-            font-weight: bold;
-            margin-bottom: 5px;
-        }
-        .order-book {
-            font-family: monospace;
-            font-size: 12px;
-        }
-        .order-book table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        .order-book th, .order-book td {
-            padding: 4px 8px;
-            text-align: right;
-            border: 1px solid #eee;
-        }
-        .bid-row { background: #e8f5e8; }
-        .ask-row { background: #ffeaea; }
-        .trade-row { background: #e3f2fd; }
-        .trading-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-        }
-        .order-form {
-            background: #f8f9fa;
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 15px;
-        }
-        .order-form input, .order-form select {
-            width: 100%;
-            padding: 8px;
-            margin: 5px 0;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            box-sizing: border-box;
-        }
-        .peers {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-        .peer {
-            background: #d4edda;
-            padding: 5px 10px;
-            border-radius: 4px;
-            font-size: 12px;
-            font-family: monospace;
-        }
-        .peer.connected {
-            background: #28a745;
-            color: white;
-        }
-        .pos-badge {
-            background: #28a745;
-            color: white;
-            padding: 2px 6px;
-            border-radius: 3px;
-            font-size: 10px;
-            margin-left: 5px;
-        }
-    </style>
+    <title>Distli Mesh BC - Enhanced Multi-Tenant Blockchain</title>
+    <link rel="stylesheet" href="styles/main.css">
 </head>
 <body>
-    <h1>Distli Mesh BC - Rust WASM Blockchain <span class="pos-badge">PoS</span></h1>
-    
-    <!-- Status and connection -->
     <div class="container">
-        <div class="status">
-            <div class="stat">
-                <strong id="peer-count">0</strong>
-                <div>Peers</div>
-            </div>
-            <div class="stat">
-                <strong id="block-count">1</strong>
-                <div>Blocks</div>
-            </div>
-            <div class="stat">
-                <strong id="pending-count">0</strong>
-                <div>Pending</div>
-            </div>
-            <div class="stat">
-                <strong id="status">Disconnected</strong>
-                <div>Status</div>
-            </div>
-            <div class="stat">
-                <strong id="network-name">None</strong>
-                <div>Network</div>
-            </div>
-            <div class="stat">
-                <strong id="stake-amount">0</strong>
-                <div>My Stake</div>
-            </div>
-        </div>
-        
-        <div style="margin-bottom: 15px;">
-            <label>Server: </label>
-            <input type="text" id="server-input" value="" placeholder="server-ip:3030" style="width: 150px;">
-            <label style="margin-left: 15px;">Network: </label>
-            <select id="network-select" style="width: 180px;">
-                <option value="">Select network...</option>
-            </select>
-            <input type="text" id="network-input" value="" placeholder="or enter new" style="width: 120px; margin-left: 5px;">
-            <button id="refresh-networks-btn" style="margin-left: 5px;" title="Refresh network list">↻</button>
-        </div>
-        
-        <div style="margin-bottom: 15px;">
-            <button id="connect-btn">Connect</button>
-            <button id="join-network-btn" disabled>Join Network</button>
-            <button id="discover-btn" disabled>Discover Peers</button>
-            <button id="connect-all-btn" disabled>Connect All</button>
-            <button id="sync-btn" disabled onclick="forceSyncWithEnterprise()">Force Sync</button>
-        </div>
-
-        <div style="margin-bottom: 15px;">
-            <label>Add Stake: </label>
-            <input type="number" id="stake-input" placeholder="Stake amount" min="1" style="width: 120px;">
-            <button id="add-stake-btn" disabled onclick="addStake()">Add Stake</button>
-        </div>
-    </div>
-
-    <!-- Trading Interface -->
-    <div class="container">
-        <h3>Proof of Stake Trading</h3>
-        
-        <div class="trading-grid">
-            <div>
-                <div class="order-form">
-                    <h4>Buy Order</h4>
-                    <select id="buy-asset">
-                        <option value="BTC">BTC</option>
-                        <option value="ETH">ETH</option>
-                        <option value="ADA">ADA</option>
-                    </select>
-                    <input type="number" id="buy-quantity" placeholder="Quantity" step="1" min="1">
-                    <input type="number" id="buy-price" placeholder="Price" step="1" min="1">
-                    <button onclick="placeBuyOrder()">Place Buy Order</button>
+        <!-- Enhanced Header -->
+        <div class="header">
+            <h1>Distli Mesh BC</h1>
+            <div class="subtitle">Enhanced Multi-Tenant Blockchain with Offline WebRTC & Trading Integration</div>
+            <div class="status-bar">
+                <div class="status-item">
+                    <strong id="peer-count">0</strong> P2P Peers
                 </div>
-            </div>
-            
-            <div>
-                <div class="order-form">
-                    <h4>Sell Order</h4>
-                    <select id="sell-asset">
-                        <option value="BTC">BTC</option>
-                        <option value="ETH">ETH</option>
-                        <option value="ADA">ADA</option>
-                    </select>
-                    <input type="number" id="sell-quantity" placeholder="Quantity" step="1" min="1">
-                    <input type="number" id="sell-price" placeholder="Price" step="1" min="1">
-                    <button onclick="placeSellOrder()">Place Sell Order</button>
+                <div class="status-item">
+                    <strong id="block-count">1</strong> Blocks
+                </div>
+                <div class="status-item">
+                    <strong id="network-name">None</strong>
+                </div>
+                <div class="status-item" id="connection-status">
+                    <span id="status">Disconnected</span>
+                </div>
+                <div class="status-item" id="pending-count" style="display: none;">
+                    <span id="pending-messages">0</span> Queued
                 </div>
             </div>
         </div>
 
-        <div style="margin-bottom: 15px;">
-            <button onclick="updateOrderBook()">Refresh Order Book</button>
-        </div>
-
-        <div class="trading-grid">
-            <div>
-                <h4>Buy Orders (Bids)</h4>
-                <div class="order-book">
-                    <table>
-                        <thead>
-                            <tr><th>Price</th><th>Quantity</th><th>Trader</th></tr>
-                        </thead>
-                        <tbody id="bids-tbody">
-                            <tr><td colspan="3">No buy orders</td></tr>
-                        </tbody>
-                    </table>
+        <!-- Network Connection Panel -->
+        <div class="network-panel">
+            <div class="connection-panel">
+                <h4>Network Connection & P2P Management</h4>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Server</label>
+                        <input type="text" id="server-input" class="form-control" placeholder="192.168.1.100:3030">
+                    </div>
+                    <div class="form-group">
+                        <label>Network</label>
+                        <select id="network-select" class="form-control">
+                            <option value="">Select network...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Create New</label>
+                        <input type="text" id="network-input" class="form-control" placeholder="Enter network name">
+                    </div>
+                    <div class="form-group">
+                        <button id="refresh-networks-btn" class="btn btn-secondary">Refresh</button>
+                    </div>
+                </div>
+                
+                <div class="button-row">
+                    <button id="connect-btn" class="btn">Connect</button>
+                    <button id="join-network-btn" class="btn" disabled>Join Network</button>
+                    <button id="discover-btn" class="btn" disabled>Discover Peers</button>
+                    <button id="connect-all-btn" class="btn" disabled>Connect All P2P</button>
+                </div>
+                
+                <div class="info-text">
+                    <strong>Offline Mode:</strong> Messages and trading work via P2P even when tracker is down
                 </div>
             </div>
-            
-            <div>
-                <h4>Sell Orders (Asks)</h4>
-                <div class="order-book">
-                    <table>
-                        <thead>
-                            <tr><th>Price</th><th>Quantity</th><th>Trader</th></tr>
-                        </thead>
-                        <tbody id="asks-tbody">
-                            <tr><td colspan="3">No sell orders</td></tr>
-                        </tbody>
-                    </table>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <div class="tabs">
+            <button class="tab active">Messaging</button>
+            <button class="tab">Trading</button>
+            <button class="tab"">Order Book</button>
+            <button class="tab">Smart Contracts</button>
+            <button class="tab">Contract Editor</button>
+        </div>
+
+        <!-- Tab Content Container -->
+        <div class="tab-content">
+            <!-- Messaging Tab -->
+            <div id="messaging" class="tab-panel active">
+                <h2>Send Message</h2>
+                <div class="message-form">
+                    <div class="message-input-group">
+                        <input type="text" id="message-input" class="form-control" placeholder="Enter message (automatic blockchain creation)">
+                    </div>
+                    <button onclick="sendMessage()" id="message-btn" class="btn offline-enabled" disabled>Send Message</button>
+                </div>
+
+                <div id="blockchain-display" class="blockchain-display">
+                    <h3>Recent Blockchain Activity</h3>
+                    <div class="info-banner">
+                        <strong>One Block Per Message:</strong> Each message automatically creates its own block
+                    </div>
+                    <div id="blockchain">Loading blockchain data...</div>
                 </div>
             </div>
-        </div>
 
-        <h4>Recent Trades</h4>
-        <div class="order-book">
-            <table>
-                <thead>
-                    <tr><th>Time</th><th>Asset</th><th>Quantity</th><th>Price</th><th>Buyer</th><th>Seller</th></tr>
-                </thead>
-                <tbody id="trades-tbody">
-                    <tr><td colspan="6">No trades yet</td></tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    <!-- Messaging -->
-    <div class="container">
-        <h3>Send Message</h3>
-        <input type="text" id="message-input" placeholder="Enter message" style="width: 300px;">
-        <button onclick="sendMessage()" disabled id="message-btn">Send Message</button>
-        <button onclick="deployTradingContract()" disabled id="contract-btn">Deploy Trading Contract</button>
-    </div>
-
-    <!-- Smart Contract Interaction -->
-    <div class="container">
-        <h3>Smart Contract Trading</h3>
-        <div class="trading-grid">
-            <div>
-                <h4>Contract Buy Order</h4>
-                <select id="contract-buy-asset">
-                    <option value="BTC">BTC</option>
-                    <option value="ETH">ETH</option>
-                    <option value="ADA">ADA</option>
-                </select>
-                <input type="number" id="contract-buy-quantity" placeholder="Quantity" step="0.01" min="0.01">
-                <input type="number" id="contract-buy-price" placeholder="Price" step="0.01" min="0.01">
-                <button onclick="placeContractBuyOrder()" disabled id="contract-buy-btn">Place Contract Buy</button>
-            </div>
-            
-            <div>
-                <h4>Contract Sell Order</h4>
-                <select id="contract-sell-asset">
-                    <option value="BTC">BTC</option>
-                    <option value="ETH">ETH</option>
-                    <option value="ADA">ADA</option>
-                </select>
-                <input type="number" id="contract-sell-quantity" placeholder="Quantity" step="0.01" min="0.01">
-                <input type="number" id="contract-sell-price" placeholder="Price" step="0.01" min="0.01">
-                <button onclick="placeContractSellOrder()" disabled id="contract-sell-btn">Place Contract Sell</button>
-            </div>
-        </div>
-        
-        <div style="margin: 15px 0;">
-            <button onclick="getContractOrderBook()" disabled id="contract-orders-btn">Get Contract Order Book</button>
-            <button onclick="getContractTrades()" disabled id="contract-trades-btn">Get Contract Trades</button>
-        </div>
-        
-        <div id="contract-results" style="background: #f8f9fa; padding: 10px; border-radius: 4px; font-family: monospace; font-size: 12px; max-height: 200px; overflow-y: auto;">
-            Smart contract results will appear here...
-        </div>
-    </div>
-
-    <!-- Send Transaction -->
-    <div class="container">
-        <h3>Send Transaction</h3>
-        <input type="text" id="to-address" placeholder="To address">
-        <input type="number" id="amount-input" placeholder="Amount" min="1">
-        <button id="send-btn" disabled onclick="sendTransaction()">Send Transaction</button>
-        <button id="mine-btn" disabled onclick="mineBlock()">Mine Block (PoS)</button>
-    </div>
-
-    <!-- Connected Peers -->
-    <div class="container">
-        <h3>Connected Peers</h3>
-        <div class="peers" id="peers-list">
-            <div>No peers connected</div>
-        </div>
-    </div>
-
-    <!-- Blockchain -->
-    <div class="container">
-        <h3>Blockchain (Rust WASM)</h3>
-        <div id="blockchain"></div>
-    </div>
-
-    <!-- Activity Log -->
-    <div class="container">
-        <h3>Activity Log</h3>
-        <div class="log" id="log"></div>
-    </div>
-
-    <script type="module">
-        import init, { Blockchain, OrderBook } from './pkg/distli_mesh_bc.js';
-
-        let wasmModule;
-        let blockchain;
-        let orderBook;
-        let mesh;
-
-        // Initialize WASM and start application
-        async function initApp() {
-            try {
-                log('Loading WASM module...');
-                wasmModule = await init();
+            <!-- Trading Tab -->
+            <div id="trading" class="tab-panel">
+                <h2>Decentralized Trading</h2>
+                <div class="info-banner">
+                    <strong>Blockchain Integration:</strong> All trades create permanent blockchain transactions and sync across the network
+                </div>
                 
-                log('Creating Rust blockchain...');
-                blockchain = new Blockchain();
-                orderBook = new OrderBook();
-                
-                log('WASM blockchain initialized successfully');
-                
-                // Initialize mesh networking
-                mesh = new MeshManager();
-                window.mesh = mesh;
-                window.blockchain = blockchain;
-                window.orderBook = orderBook;
-                
-                // Set up initial UI
-                document.getElementById('server-input').value = `${window.location.hostname}:3030`;
-                updateUI();
-                
-            } catch (error) {
-                log('Failed to initialize WASM: ' + error.message);
-                console.error('WASM initialization error:', error);
-            }
-        }
-
-        // Enhanced mesh networking class with WebRTC support
-        class MeshManager {
-            constructor() {
-                this.ws = null;
-                this.peers = new Map();
-                this.dataChannels = new Map();
-                this.availablePeers = [];
-                this.connected = false;
-                this.currentNetwork = null;
-                this.serverUrl = '';
-                this.rtcConfig = {
-                    iceServers: [
-                        { urls: 'stun:stun.l.google.com:19302' },
-                        { urls: 'stun:stun1.l.google.com:19302' }
-                    ]
-                };
-
-        // Force sync with enterprise blockchain
-        window.forceSyncWithEnterprise = function() {
-            if (mesh && blockchain) {
-                log('🔄 Forcing sync with enterprise blockchain...');
-                mesh.syncWithEnterprise();
-            } else {
-                log('❌ Cannot sync - not connected or blockchain not available');
-            }
-        };
-
-        // Get blockchain sync status
-        window.getBlockchainStatus = function() {
-            if (!blockchain) {
-                log('❌ Blockchain not available');
-                return;
-            }
-            
-            try {
-                const summary = blockchain.get_sync_summary();
-                const data = JSON.parse(summary);
-                
-                log(`📊 Blockchain Status:
-                   Height: ${data.current_height}
-                   Last Sync: ${data.last_sync_height}  
-                   New Blocks: ${data.new_blocks}
-                   Pending TX: ${data.pending_transactions}
-                   Validators: ${data.validators}`);
-            } catch (error) {
-                log('Error getting blockchain status: ' + error.message);
-            }
-        };
-
-        // Messaging Functions - Enhanced for P2P blockchain
-
-	window.sendMessage = function() {
-	    const messageText = document.getElementById('message-input').value.trim();
-	    if (!messageText) {
-		log('Please enter a message');
-		return;
-	    }
-
-	    try {
-		// 1. Add to local blockchain
-		const transaction = blockchain.add_message(messageText, getUserId());
-		log(`💬 Message added to local blockchain: "${messageText}"`);
-
-		// 2. Broadcast the MESSAGE to P2P peers (not the transaction)
-		if (mesh) {
-		    mesh.broadcastToP2P({
-			type: 'message',
-			content: messageText,
-			sender: getUserId(),
-			timestamp: Math.floor(Date.now() / 1000)
-		    });
-		}
-
-		// 3. AUTOMATICALLY mine the block since we created the transaction
-		setTimeout(() => {
-		    if (blockchain.get_pending_count() > 0) {
-			mineBlock(); // Mine immediately after creating transaction
-		    }
-		}, 100);
-
-		document.getElementById('message-input').value = '';
-		updateUI();
-
-	    } catch (error) {
-		log('Error sending message: ' + error.message);
-	    }
-	};
-        // Smart Contract Functions
-        window.deployTradingContract = function() {
-            try {
-                const contractResult = blockchain.deploy_trading_contract(getUserId());
-                if (contractResult) {
-                    mesh.contractDeployed = true;
-                    log('Trading contract deployed successfully!');
-                    document.getElementById('contract-results').textContent = 'Trading contract deployed and ready for use.';
-                    updateUI();
-                } else {
-                    log('Failed to deploy trading contract');
-                }
-            } catch (error) {
-                log('Error deploying contract: ' + error.message);
-            }
-        };
-
-        window.placeContractBuyOrder = function() {
-            const asset = document.getElementById('contract-buy-asset').value;
-            const quantity = parseFloat(document.getElementById('contract-buy-quantity').value) || 0;
-            const price = parseFloat(document.getElementById('contract-buy-price').value) || 0;
-            
-            if (!asset || quantity <= 0 || price <= 0) {
-                log('Invalid contract buy order parameters');
-                return;
-            }
-
-            try {
-                const result = blockchain.call_contract_buy(asset, quantity, price, getUserId());
-                log(`Contract buy order: ${quantity} ${asset} @ ${price}`);
-                
-                // Show result
-                document.getElementById('contract-results').textContent = 
-                    `Buy Order Result: ${JSON.stringify(result, null, 2)}`;
-                
-                // Broadcast to P2P peers
-                if (mesh) {
-                    mesh.broadcastToP2P({
-                        type: 'contract_transaction',
-                        action: 'buy',
-                        asset, quantity, price,
-                        sender: getUserId()
-                    });
-                }
-                
-                // Clear form
-                document.getElementById('contract-buy-quantity').value = '';
-                document.getElementById('contract-buy-price').value = '';
-                
-                updateUI();
-                
-            } catch (error) {
-                log('Error placing contract buy order: ' + error.message);
-                document.getElementById('contract-results').textContent = `Error: ${error.message}`;
-            }
-        };
-
-        window.placeContractSellOrder = function() {
-            const asset = document.getElementById('contract-sell-asset').value;
-            const quantity = parseFloat(document.getElementById('contract-sell-quantity').value) || 0;
-            const price = parseFloat(document.getElementById('contract-sell-price').value) || 0;
-            
-            if (!asset || quantity <= 0 || price <= 0) {
-                log('Invalid contract sell order parameters');
-                return;
-            }
-
-            try {
-                const result = blockchain.call_contract_sell(asset, quantity, price, getUserId());
-                log(`Contract sell order: ${quantity} ${asset} @ ${price}`);
-                
-                // Show result
-                document.getElementById('contract-results').textContent = 
-                    `Sell Order Result: ${JSON.stringify(result, null, 2)}`;
-                
-                // Broadcast to P2P peers
-                if (mesh) {
-                    mesh.broadcastToP2P({
-                        type: 'contract_transaction',
-                        action: 'sell',
-                        asset, quantity, price,
-                        sender: getUserId()
-                    });
-                }
-                
-                // Clear form
-                document.getElementById('contract-sell-quantity').value = '';
-                document.getElementById('contract-sell-price').value = '';
-                
-                updateUI();
-                
-            } catch (error) {
-                log('Error placing contract sell order: ' + error.message);
-                document.getElementById('contract-results').textContent = `Error: ${error.message}`;
-            }
-        };
-
-        window.getContractOrderBook = function() {
-            try {
-                const orderBookData = blockchain.get_contract_order_book();
-                document.getElementById('contract-results').textContent = 
-                    `Contract Order Book:\n${JSON.stringify(orderBookData, null, 2)}`;
-                log('Retrieved contract order book');
-            } catch (error) {
-                log('Error getting contract order book: ' + error.message);
-                document.getElementById('contract-results').textContent = `Error: ${error.message}`;
-            }
-        };
-
-        window.getContractTrades = function() {
-            try {
-                const tradesData = blockchain.get_contract_trades();
-                document.getElementById('contract-results').textContent = 
-                    `Contract Trades:\n${JSON.stringify(tradesData, null, 2)}`;
-                log('Retrieved contract trades');
-            } catch (error) {
-                log('Error getting contract trades: ' + error.message);
-                document.getElementById('contract-results').textContent = `Error: ${error.message}`;
-            }
-        };
-                this.contractDeployed = false;
-            }
-            
-            async connect() {
-                try {
-                    const serverInput = document.getElementById('server-input').value.trim();
-                    const server = serverInput || `${window.location.hostname}:3030`;
-                    this.serverUrl = server;
-                    const wsUrl = `ws://${server}/ws`;
-                    
-                    this.ws = new WebSocket(wsUrl);
-                    
-                    this.ws.onopen = () => {
-                        this.connected = true;
-                        log('Connected to tracker');
-                        this.refreshNetworkList();
-                        updateUI();
-                    };
-                    
-                    this.ws.onclose = () => {
-                        this.connected = false;
-                        log('Disconnected from tracker');
-                        updateUI();
-                    };
-                    
-                    this.ws.onmessage = (event) => {
-                        const message = JSON.parse(event.data);
-                        this.handleMessage(message);
-                    };
-                    
-                } catch (error) {
-                    log('Connection failed: ' + error.message);
-                }
-            }
-
-            handleMessage(message) {
-                switch (message.type) {
-                    case 'network_list_update':
-                        this.updateNetworkDropdown(message.networks);
-                        break;
-                        
-                    case 'network_info':
-                        this.currentNetwork = message.network_id;
-                        log('Joined network: ' + message.network_id);
-                        updateUI();
-                        break;
-                        
-                    case 'peers':
-                        this.availablePeers = message.peers;
-                        log('Available peers: ' + message.peers.length);
-                        updateUI();
-                        break;
-                        
-                    case 'message':
-                        // Handle incoming messages from other peers
-                        log(`Message from ${message.sender}: ${message.content}`);
-                        // dont add to blockchain. it will be included when the original sender mines.
-                        break;
-                        
-                    case 'offer':
-                        this.handleOffer(message.target, message.offer);
-                        break;
-                        
-                    case 'answer':
-                        this.handleAnswer(message.target, message.answer);
-                        break;
-                        
-                    case 'candidate':
-                        this.handleCandidate(message.target, message.candidate);
-                        break;
-                        
-                    case 'blockchain_sync':
-                        log('Received enterprise blockchain sync for network: ' + message.network_id);
-                        updateOrderBook();
-                        break;
-                        
-                    case 'block':
-                        log('Received block #' + message.block.height);
-                        updateUI();
-                        break;
-                        
-                    case 'transaction':
-                        log('Received transaction');
-                        updateUI();
-                        break;
-                }
-            }
-
-            // WebRTC P2P Connection Methods
-            async connectToAllPeers() {
-                if (!this.availablePeers || this.availablePeers.length === 0) {
-                    log('No peers available to connect to');
-                    return;
-                }
-
-                log(`Connecting to ${this.availablePeers.length} peers...`);
-                
-                for (const peerId of this.availablePeers) {
-                    if (!this.dataChannels.has(peerId)) {
-                        await this.connectToPeer(peerId);
-                    }
-                }
-            }
-
-            async connectToPeer(peerId) {
-                try {
-                    log(`Initiating connection to peer: ${peerId.substring(0, 8)}`);
-                    
-                    const pc = new RTCPeerConnection(this.rtcConfig);
-                    this.peers.set(peerId, pc);
-                    
-                    // Create data channel
-                    const channel = pc.createDataChannel('blockchain', {
-                        ordered: true
-                    });
-                    
-                    this.setupDataChannel(channel, peerId);
-                    
-                    // Set up ICE candidate handling
-                    pc.onicecandidate = (event) => {
-                        if (event.candidate) {
-                            this.send({
-                                type: 'candidate',
-                                target: peerId,
-                                candidate: event.candidate
-                            });
-                        }
-                    };
-                    
-                    // Create and send offer
-                    const offer = await pc.createOffer();
-                    await pc.setLocalDescription(offer);
-                    
-                    this.send({
-                        type: 'offer',
-                        target: peerId,
-                        offer: offer
-                    });
-                    
-                } catch (error) {
-                    log(`Failed to connect to peer ${peerId}: ${error.message}`);
-                }
-            }
-
-            async handleOffer(fromPeer, offer) {
-                try {
-                    log(`Received offer from: ${fromPeer.substring(0, 8)}`);
-                    
-                    const pc = new RTCPeerConnection(this.rtcConfig);
-                    this.peers.set(fromPeer, pc);
-                    
-                    // Handle incoming data channel
-                    pc.ondatachannel = (event) => {
-                        this.setupDataChannel(event.channel, fromPeer);
-                    };
-                    
-                    // Set up ICE candidate handling
-                    pc.onicecandidate = (event) => {
-                        if (event.candidate) {
-                            this.send({
-                                type: 'candidate',
-                                target: fromPeer,
-                                candidate: event.candidate
-                            });
-                        }
-                    };
-                    
-                    await pc.setRemoteDescription(offer);
-                    const answer = await pc.createAnswer();
-                    await pc.setLocalDescription(answer);
-                    
-                    this.send({
-                        type: 'answer',
-                        target: fromPeer,
-                        answer: answer
-                    });
-                    
-                } catch (error) {
-                    log(`Failed to handle offer from ${fromPeer}: ${error.message}`);
-                }
-            }
-
-            async handleAnswer(fromPeer, answer) {
-                try {
-                    const pc = this.peers.get(fromPeer);
-                    if (pc) {
-                        await pc.setRemoteDescription(answer);
-                        log(`Connection established with: ${fromPeer.substring(0, 8)}`);
-                    }
-                } catch (error) {
-                    log(`Failed to handle answer from ${fromPeer}: ${error.message}`);
-                }
-            }
-
-            async handleCandidate(fromPeer, candidate) {
-                try {
-                    const pc = this.peers.get(fromPeer);
-                    if (pc) {
-                        await pc.addIceCandidate(candidate);
-                    }
-                } catch (error) {
-                    log(`Failed to handle ICE candidate from ${fromPeer}: ${error.message}`);
-                }
-            }
-
-            setupDataChannel(channel, peerId) {
-                channel.onopen = () => {
-                    log(`Data channel opened with: ${peerId.substring(0, 8)}`);
-                    this.dataChannels.set(peerId, channel);
-                    updateUI();
-                };
-                
-                channel.onclose = () => {
-                    log(`Data channel closed with: ${peerId.substring(0, 8)}`);
-                    this.dataChannels.delete(peerId);
-                    updateUI();
-                };
-                
-                channel.onmessage = (event) => {
-                    this.handleP2PMessage(JSON.parse(event.data), peerId);
-                };
-                
-                channel.onerror = (error) => {
-                    log(`Data channel error with ${peerId}: ${error}`);
-                };
-            }
-
-            handleP2PMessage(message, fromPeer) {
-                log(`P2P message from ${fromPeer.substring(0, 8)}: ${message.type}`);
-                
-                switch (message.type) {
-                    case 'blockchain_transaction':
-                        // Receive transaction from peer and add to local blockchain
-                        if (blockchain && blockchain.add_p2p_transaction(JSON.stringify(message.transaction))) {
-                            log(` Received P2P transaction: ${message.transaction.id}`);
-                            updateUI();
-                        }
-                        break;
-                        
-                    case 'blockchain_block':
-                        // Receive mined block from peer and add to local blockchain
-                        if (message.block && blockchain) {
-			    			const receivedBlock = message.block;
-			    			const currentHeight = blockchain.get_chain_length() - 1;
-			    			// Accept blocks from other miners
-        		    		if (receivedBlock.height === currentHeight + 1) {	
-			     				if (blockchain.add_p2p_block(JSON.stringify(receivedBlock))) {
-                					log(` Synced block #${receivedBlock.height} from miner ${message.sender}`);
-                					updateUI();
-                					updateBlockchain();
-								}
-							}
-                        }
-                        break;
-                        
-                    case 'sync_request':
-                        // Peer is requesting our blockchain state
-                        this.sendBlockchainSync(fromPeer);
-                        break;
-                        
-                    case 'sync_response':
-                        // Received blockchain sync from peer
-                        this.handleBlockchainSync(message.data);
-                        break;
-                        
-                    case 'message':
-                        // Direct P2P message
-                        log(` P2P Message from ${fromPeer.substring(0, 8)}: ${message.data}`);
-                        break;
-                }
-            }
-
-            // Send blockchain sync to a specific peer
-            sendBlockchainSync(peerId) {
-                const channel = this.dataChannels.get(peerId);
-                if (channel && channel.readyState === 'open' && blockchain) {
-                    const syncData = blockchain.get_sync_summary();
-                    try {
-                        channel.send(JSON.stringify({
-                            type: 'sync_response',
-                            data: syncData
-                        }));
-                        log(`📤 Sent blockchain sync to ${peerId.substring(0, 8)}`);
-                    } catch (error) {
-                        log(`Failed to send sync to ${peerId}: ${error.message}`);
-                    }
-                }
-            }
-
-            // Handle incoming blockchain sync
-            handleBlockchainSync(syncData) {
-                try {
-                    const data = JSON.parse(syncData);
-                    log(`📊 Peer blockchain: height ${data.current_height}, pending ${data.pending_transactions}`);
-                    // Could implement conflict resolution here
-                } catch (error) {
-                    log(`Error handling blockchain sync: ${error.message}`);
-                }
-            }
-
-            // Enhanced P2P broadcast for blockchain data
-            broadcastBlockchainTransaction(transaction) {
-                const message = {
-                    type: 'blockchain_transaction',
-                    transaction: transaction
-                };
-                
-                let sent = 0;
-                for (const [peerId, channel] of this.dataChannels) {
-                    if (channel.readyState === 'open') {
-                        try {
-                            channel.send(JSON.stringify(message));
-                            sent++;
-                        } catch (error) {
-                            log(`Failed to send transaction to ${peerId}: ${error.message}`);
-                        }
-                    }
-                }
-                
-                if (sent > 0) {
-                    log(`📤 Broadcast transaction to ${sent} P2P peers`);
-                } else {
-                    log(`⚠️ No P2P peers available - operating in offline mode`);
-                    this.offlineMode = true;
-                }
-                
-                return sent > 0;
-            }
-
-            // Broadcast mined block to P2P network
-            broadcastMinedBlock(block) {
-                const message = {
-                    type: 'blockchain_block',
-                    block: block
-                };
-                
-                let sent = 0;
-                for (const [peerId, channel] of this.dataChannels) {
-                    if (channel.readyState === 'open') {
-                        try {
-                            channel.send(JSON.stringify(message));
-                            sent++;
-                        } catch (error) {
-                            log(`Failed to send block to ${peerId}: ${error.message}`);
-                        }
-                    }
-                }
-                
-                if (sent > 0) {
-                    log(`📤 Broadcast block #${block.height} to ${sent} P2P peers`);
-                }
-                
-                return sent > 0;
-            }
-
-            // Check connection status and update offline mode
-            updateConnectionStatus() {
-                const wasOffline = this.offlineMode;
-                this.offlineMode = !this.connected && this.dataChannels.size === 0;
-                
-                if (wasOffline && !this.offlineMode) {
-                    log('🔄 Connection restored - preparing to sync with enterprise');
-                    this.syncWithEnterprise();
-                } else if (!wasOffline && this.offlineMode) {
-                    log('📴 Now operating in offline mode - using P2P only');
-                }
-            }
-
-            // Sync with enterprise blockchain when reconnected
-            async syncWithEnterprise() {
-                if (!this.connected || !blockchain) return;
-                
-                try {
-                    const syncData = blockchain.prepare_enterprise_sync();
-                    const syncPayload = JSON.parse(syncData);
-                    
-                    if (syncPayload.new_blocks.length > 0 || syncPayload.pending_transactions.length > 0) {
-                        log(`🔄 Syncing ${syncPayload.new_blocks.length} blocks and ${syncPayload.pending_transactions.length} transactions with enterprise`);
-                        
-                        // Send delta sync to tracker
-                        this.send({
-                            type: 'enterprise_sync',
-                            network_id: this.currentNetwork,
-                            sync_data: syncPayload
-                        });
-                        
-                        // Update last sync marker
-                        blockchain.set_last_sync_block(syncPayload.new_blocks.length > 0 ? 
-                            syncPayload.new_blocks[syncPayload.new_blocks.length - 1].height : 
-                            blockchain.get_chain_length() - 1);
-                        
-                        this.lastSyncTime = Date.now();
-                    } else {
-                        log('✅ No new data to sync with enterprise');
-                    }
-                } catch (error) {
-                    log(`Error syncing with enterprise: ${error.message}`);
-                }
-            }
-
-            broadcastToP2P(message) {
-                let sent = 0;
-                for (const [peerId, channel] of this.dataChannels) {
-                    if (channel.readyState === 'open') {
-                        try {
-                            channel.send(JSON.stringify(message));
-                            sent++;
-                        } catch (error) {
-                            log(`Failed to send to ${peerId}: ${error.message}`);
-                        }
-                    }
-                }
-                if (sent > 0) {
-                    log(`Broadcast message to ${sent} peers via P2P`);
-                }
-            }
-
-            updateNetworkDropdown(networks) {
-                const select = document.getElementById('network-select');
-                while (select.children.length > 1) {
-                    select.removeChild(select.lastChild);
-                }
-                networks.forEach(network => {
-                    const option = document.createElement('option');
-                    option.value = network.id;
-                    option.textContent = `${network.name} (${network.peer_count} peers)`;
-                    select.appendChild(option);
-                });
-            }
-
-            async refreshNetworkList() {
-                if (!this.serverUrl) return;
-                try {
-                    const response = await fetch(`http://${this.serverUrl}/api/network-list`);
-                    const networks = await response.json();
-                    this.updateNetworkDropdown(networks);
-                } catch (error) {
-                    log('Failed to fetch network list: ' + error.message);
-                }
-            }
-
-            getSelectedNetwork() {
-                const selectValue = document.getElementById('network-select').value;
-                const inputValue = document.getElementById('network-input').value.trim();
-                return selectValue || inputValue || null;
-            }
-
-            joinNetwork(networkId) {
-                if (this.connected && networkId) {
-                    this.send({
-                        type: 'join_network',
-                        network_id: networkId
-                    });
-                    log('Joining network: ' + networkId);
-                }
-            }
-
-            send(message) {
-                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-                    this.ws.send(JSON.stringify(message));
-                } else {
-                    log('Cannot send message - WebSocket not open');
-                }
-            }
-        }
-
-        // Trading functions using WASM
-        window.placeBuyOrder = function() {
-            const asset = document.getElementById('buy-asset').value;
-            const quantity = parseInt(document.getElementById('buy-quantity').value) || 0;
-            const price = parseInt(document.getElementById('buy-price').value) || 0;
-            
-            if (!asset || quantity <= 0 || price <= 0) {
-                log('Invalid buy order parameters');
-                return;
-            }
-
-            try {
-                const orderId = orderBook.place_buy_order(getUserId(), asset, quantity, price);
-                log(`Buy order placed: ${quantity} ${asset} @ ${price} (Order ID: ${orderId})`);
-                
-                // Broadcast to P2P peers
-                if (mesh) {
-                    mesh.broadcastToP2P({
-                        type: 'transaction',
-                        data: `Buy order: ${quantity} ${asset} @ ${price}`
-                    });
-                }
-                
-                // Clear form
-                document.getElementById('buy-quantity').value = '';
-                document.getElementById('buy-price').value = '';
-                
-                updateOrderBook();
-                updateUI();
-                
-            } catch (error) {
-                log('Error placing buy order: ' + error.message);
-            }
-        };
-
-        window.placeSellOrder = function() {
-            const asset = document.getElementById('sell-asset').value;
-            const quantity = parseInt(document.getElementById('sell-quantity').value) || 0;
-            const price = parseInt(document.getElementById('sell-price').value) || 0;
-            
-            if (!asset || quantity <= 0 || price <= 0) {
-                log('Invalid sell order parameters');
-                return;
-            }
-
-            try {
-                const orderId = orderBook.place_sell_order(getUserId(), asset, quantity, price);
-                log(`Sell order placed: ${quantity} ${asset} @ ${price} (Order ID: ${orderId})`);
-                
-                // Broadcast to P2P peers
-                if (mesh) {
-                    mesh.broadcastToP2P({
-                        type: 'transaction',
-                        data: `Sell order: ${quantity} ${asset} @ ${price}`
-                    });
-                }
-                
-                // Clear form
-                document.getElementById('sell-quantity').value = '';
-                document.getElementById('sell-price').value = '';
-                
-                updateOrderBook();
-                updateUI();
-                
-            } catch (error) {
-                log('Error placing sell order: ' + error.message);
-            }
-        };
-
-        window.updateOrderBook = function() {
-            try {
-                // Try to get order book data from both WASM OrderBook and Blockchain
-                let orderBookData, tradesData;
-                
-                try {
-                    orderBookData = JSON.parse(orderBook.get_order_book_json());
-                    tradesData = JSON.parse(orderBook.get_recent_trades_json());
-                } catch (e) {
-                    log('Using blockchain fallback for order book data');
-                    // Fallback to blockchain if OrderBook fails
-                    orderBookData = { bids: [], asks: [] };
-                    tradesData = [];
-                }
-                
-                // Update bids
-                const bidsTableBody = document.getElementById('bids-tbody');
-                if (orderBookData.bids && orderBookData.bids.length > 0) {
-                    bidsTableBody.innerHTML = orderBookData.bids.map(order => `
-                        <tr class="bid-row">
-                            <td>${order.price}</td>
-                            <td>${order.quantity}</td>
-                            <td>${order.trader ? order.trader.substring(0, 8) : 'Unknown'}</td>
-                        </tr>
-                    `).join('');
-                } else {
-                    bidsTableBody.innerHTML = '<tr><td colspan="3">No buy orders</td></tr>';
-                }
-                
-                // Update asks
-                const asksTableBody = document.getElementById('asks-tbody');
-                if (orderBookData.asks && orderBookData.asks.length > 0) {
-                    asksTableBody.innerHTML = orderBookData.asks.map(order => `
-                        <tr class="ask-row">
-                            <td>${order.price}</td>
-                            <td>${order.quantity}</td>
-                            <td>${order.trader ? order.trader.substring(0, 8) : 'Unknown'}</td>
-                        </tr>
-                    `).join('');
-                } else {
-                    asksTableBody.innerHTML = '<tr><td colspan="3">No sell orders</td></tr>';
-                }
-
-                // Update trades
-                const tradesTableBody = document.getElementById('trades-tbody');
-                if (tradesData && tradesData.length > 0) {
-                    tradesTableBody.innerHTML = tradesData.map(trade => `
-                        <tr class="trade-row">
-                            <td>${new Date(trade.timestamp * 1000).toLocaleTimeString()}</td>
-                            <td>${trade.asset}</td>
-                            <td>${trade.quantity}</td>
-                            <td>${trade.price}</td>
-                            <td>${trade.buyer ? trade.buyer.substring(0, 8) : 'Unknown'}</td>
-                            <td>${trade.seller ? trade.seller.substring(0, 8) : 'Unknown'}</td>
-                        </tr>
-                    `).join('');
-                } else {
-                    tradesTableBody.innerHTML = '<tr><td colspan="6">No recent trades</td></tr>';
-                }
-                
-                log(`Order book updated - Bids: ${orderBookData.bids?.length || 0}, Asks: ${orderBookData.asks?.length || 0}, Trades: ${tradesData?.length || 0}`);
-                
-            } catch (error) {
-                log('Error updating order book: ' + error.message);
-                // Show error state
-                document.getElementById('bids-tbody').innerHTML = '<tr><td colspan="3">Error loading bids</td></tr>';
-                document.getElementById('asks-tbody').innerHTML = '<tr><td colspan="3">Error loading asks</td></tr>';
-                document.getElementById('trades-tbody').innerHTML = '<tr><td colspan="6">Error loading trades</td></tr>';
-            }
-        };
-
-        window.addStake = function() {
-            const amount = parseInt(document.getElementById('stake-input').value) || 0;
-            if (amount <= 0) {
-                log('Invalid stake amount');
-                return;
-            }
-
-            try {
-                blockchain.add_validator(getUserId(), amount);
-                log(`Added ${amount} stake as validator`);
-                document.getElementById('stake-input').value = '';
-                document.getElementById('stake-amount').textContent = amount;
-                updateUI();
-            } catch (error) {
-                log('Error adding stake: ' + error.message);
-            }
-        };
-
-        window.sendTransaction = function() {
-            const to = document.getElementById('to-address').value.trim();
-            const amount = parseInt(document.getElementById('amount-input').value) || 0;
-            
-            if (!to || amount <= 0) {
-                log('Invalid transaction parameters');
-                return;
-            }
-
-            try {
-                const txId = blockchain.add_transaction(getUserId(), to, amount);
-                log(`Transaction sent: ${amount} to ${to} (TX: ${txId})`);
-                
-                // Broadcast to P2P peers
-                if (mesh) {
-                    mesh.broadcastToP2P({
-                        type: 'transaction',
-                        data: `Transfer: ${amount} to ${to}`
-                    });
-                }
-                
-                document.getElementById('to-address').value = '';
-                document.getElementById('amount-input').value = '';
-                
-                updateUI();
-            } catch (error) {
-                log('Error sending transaction: ' + error.message);
-            }
-        };
-
-// Update the mine button to only work if you have pending transactions
-window.mineBlock = function() {
-    try {
-        const pendingCount = blockchain.get_pending_count();
-        if (pendingCount === 0) {
-            log('No pending transactions to mine - only transaction creators can mine');
-            return false;
-        }
-        
-        const success = blockchain.mine_block();
-        if (success) {
-            log('Block mined successfully using Proof of Stake');
-            
-            const newBlock = JSON.parse(blockchain.get_latest_block_json());
-            
-            // Broadcast the completed block to sync with other nodes
-            if (mesh) {
-                mesh.broadcastToP2P({
-                    type: 'blockchain_block',
-                    block: newBlock,
-                    sender: getUserId()
-                });
-                log('📤 Block #' + newBlock.height + ' broadcast for sync');
-            }
-            
-            // Send to tracker
-            if (mesh && mesh.connected && mesh.currentNetwork) {
-                mesh.send({
-                    type: 'block',
-                    block: newBlock
-                });
-                log('📤 Block #' + newBlock.height + ' sent to tracker');
-            }
-            
-            updateUI();
-            updateBlockchain();
-            return true;
-        }
-        return false;
-    } catch (error) {
-        log('Error mining block: ' + error.message);
-        return false;
-    }
-};
-//////
-        // UI functions
-        function log(message) {
-            const logDiv = document.getElementById('log');
-            const time = new Date().toLocaleTimeString();
-            logDiv.innerHTML += time + ': ' + message + '\n';
-            logDiv.scrollTop = logDiv.scrollHeight;
-        }
-
-	function updateUI() {
-	    if (!blockchain) return;
-	    
-	    try {
-		const p2pConnections = mesh ? mesh.dataChannels.size : 0;
-		const trackerConnected = mesh && mesh.connected;
-		const offlineMode = mesh ? mesh.offlineMode : true;
-		
-		document.getElementById('peer-count').textContent = p2pConnections;
-		document.getElementById('block-count').textContent = blockchain.get_chain_length();
-		document.getElementById('pending-count').textContent = blockchain.get_pending_count();
-		
-		// Enhanced status display
-		let statusText = 'Offline';
-		if (trackerConnected && p2pConnections > 0) {
-		    statusText = `Online (${p2pConnections} P2P)`;
-		} else if (trackerConnected) {
-		    statusText = 'Tracker Only';
-		} else if (p2pConnections > 0) {
-		    statusText = `P2P Only (${p2pConnections})`;
-		} else if (offlineMode) {
-		    statusText = 'Offline';
-		}
-		document.getElementById('status').textContent = statusText;
-		
-		document.getElementById('network-name').textContent = mesh && mesh.currentNetwork || 'None';
-		
-		const hasNetwork = mesh && (mesh.currentNetwork || p2pConnections > 0);
-		const hasValidators = blockchain.get_validator_count() > 0;
-		const canOperate = trackerConnected || p2pConnections > 0 || offlineMode; // Removed hasValidators requirement
-		
-		document.getElementById('connect-btn').textContent = trackerConnected ? 'Disconnect' : 'Connect';
-		document.getElementById('join-network-btn').disabled = !mesh || !mesh.connected;
-		document.getElementById('discover-btn').disabled = !hasNetwork;
-		document.getElementById('connect-all-btn').disabled = !hasNetwork || !mesh.availablePeers.length;
-		
-		// Allow transactions only when we have validators
-		document.getElementById('send-btn').disabled = !hasValidators;
-		document.getElementById('mine-btn').disabled = blockchain.get_pending_count() === 0 || !hasValidators;
-		
-		// FIXED: Allow adding stake as long as we can operate (don't require existing validators)
-		document.getElementById('add-stake-btn').disabled = !canOperate;
-		
-		// Enable messaging and contracts in offline mode too
-		document.getElementById('message-btn').disabled = !canOperate;
-		document.getElementById('contract-btn').disabled = !canOperate || mesh.contractDeployed;
-		document.getElementById('contract-buy-btn').disabled = !canOperate;
-		document.getElementById('contract-sell-btn').disabled = !canOperate;
-		document.getElementById('contract-orders-btn').disabled = !canOperate;
-		document.getElementById('contract-trades-btn').disabled = !canOperate;
-		document.getElementById('sync-btn').disabled = !trackerConnected || !blockchain;
-		
-		updateBlockchain();
-		updatePeersList();
-		
-		// Update connection status
-		if (mesh) {
-		    mesh.updateConnectionStatus();
-		}
-		
-	    } catch (error) {
-		log('Error updating UI: ' + error.message);
-	    }
-	}
-	/////
-
-        function updatePeersList() {
-            const peersDiv = document.getElementById('peers-list');
-            if (!mesh || !mesh.availablePeers.length) {
-                peersDiv.innerHTML = '<div>No peers discovered</div>';
-                return;
-            }
-            
-            peersDiv.innerHTML = '';
-            for (const peerId of mesh.availablePeers) {
-                const peerDiv = document.createElement('div');
-                peerDiv.className = mesh.dataChannels.has(peerId) ? 'peer connected' : 'peer';
-                peerDiv.textContent = `${peerId.substring(0, 8)}${mesh.dataChannels.has(peerId) ? ' ✓' : ''}`;
-                peersDiv.appendChild(peerDiv);
-            }
-        }
-
-        function updateBlockchain() {
-            if (!blockchain) return;
-            
-            const blockchainDiv = document.getElementById('blockchain');
-            
-            try {
-                const chainLength = blockchain.get_chain_length();
-                const latestBlock = JSON.parse(blockchain.get_latest_block_json());
-                const pendingCount = blockchain.get_pending_count();
-                
-                let blocksHtml = `<h3>Blockchain Explorer - ${chainLength} Block${chainLength !== 1 ? 's' : ''}</h3>`;
-                
-                // Display latest block with full details
-                blocksHtml += `
-                    <div class="block" style="margin-bottom: 20px; border-left: 4px solid #2196f3; padding: 15px; background: #e3f2fd; border-radius: 8px;">
-                        <div style="font-weight: bold; margin-bottom: 10px; font-size: 16px;">
-                            🏆 Block #${latestBlock.height} 
-                            <span class="pos-badge" style="background: #27ae60; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; margin-left: 10px;">PoS</span>
+                <div class="trading-grid">
+                    <div class="order-form buy-form">
+                        <h3>Buy Order</h3>
+                        <div class="form-group">
+                            <label>Asset</label>
+                            <select id="buy-asset" class="form-control">
+                                <option value="BTC">Bitcoin (BTC)</option>
+                                <option value="ETH">Ethereum (ETH)</option>
+                                <option value="ADA">Cardano (ADA)</option>
+                                <option value="DOT">Polkadot (DOT)</option>
+                                <option value="SOL">Solana (SOL)</option>
+                            </select>
                         </div>
-                        
-                        <div style="margin-bottom: 8px;"><strong>🔍 Validator:</strong> ${latestBlock.validator}</div>
-                        <div style="margin-bottom: 8px;"><strong>⚖️ Stake Weight:</strong> ${latestBlock.stake_weight}</div>
-                        <div style="margin-bottom: 8px;"><strong>🔗 Hash:</strong> <span style="font-family: monospace; font-size: 11px;">${latestBlock.hash.substring(0, 40)}...</span></div>
-                        <div style="margin-bottom: 8px;"><strong>🔗 Previous:</strong> <span style="font-family: monospace; font-size: 11px;">${latestBlock.previous_hash.substring(0, 40)}...</span></div>
-                        <div style="margin-bottom: 8px;"><strong>⏰ Time:</strong> ${new Date(latestBlock.timestamp * 1000).toLocaleString()}</div>
-                        <div style="margin-bottom: 15px;"><strong>📋 Transactions:</strong> ${latestBlock.transactions ? latestBlock.transactions.length : 0}</div>
-                        
-                        <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #dee2e6;">
-                            <strong>📝 Transaction Details:</strong>
-                `;
+                        <div class="form-group">
+                            <label>Quantity</label>
+                            <input type="number" id="buy-quantity" class="form-control" placeholder="Amount to buy" min="0.01" step="0.01">
+                        </div>
+                        <div class="form-group">
+                            <label>Price (USD)</label>
+                            <input type="number" id="buy-price" class="form-control" placeholder="Price per unit" min="0.01" step="0.01">
+                        </div>
+                        <button onclick="placeBuyOrder()" class="btn btn-buy">Place Buy Order</button>
+                    </div>
+                    
+                    <div class="order-form sell-form">
+                        <h3>Sell Order</h3>
+                        <div class="form-group">
+                            <label>Asset</label>
+                            <select id="sell-asset" class="form-control">
+                                <option value="BTC">Bitcoin (BTC)</option>
+                                <option value="ETH">Ethereum (ETH)</option>
+                                <option value="ADA">Cardano (ADA)</option>
+                                <option value="DOT">Polkadot (DOT)</option>
+                                <option value="SOL">Solana (SOL)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Quantity</label>
+                            <input type="number" id="sell-quantity" class="form-control" placeholder="Amount to sell" min="0.01" step="0.01">
+                        </div>
+                        <div class="form-group">
+                            <label>Price (USD)</label>
+                            <input type="number" id="sell-price" class="form-control" placeholder="Price per unit" min="0.01" step="0.01">
+                        </div>
+                        <button onclick="placeSellOrder()" class="btn btn-sell">Place Sell Order</button>
+                    </div>
+                </div>
+
+                <div class="blockchain-display">
+                    <h3>Trading Blockchain Activity</h3>
+                    <div class="info-banner">
+                        <strong>Trading Transactions:</strong> All buy/sell orders are recorded on the blockchain
+                    </div>
+                    <div id="blockchain-trading">Loading blockchain data...</div>
+                </div>
+            </div>
+
+            <!-- Order Book Tab -->
+            <div id="orderbook" class="tab-panel">
+                <h2>Live Order Book</h2>
+                <button onclick="updateOrderBook()" class="btn refresh-btn">Refresh Order Book</button>
                 
-                if (latestBlock.transactions && latestBlock.transactions.length > 0) {
-                    latestBlock.transactions.forEach((tx, index) => {
-                        let messageContent = 'N/A';
-                        let txTypeDisplay = 'Unknown';
-                        
-                        // Extract message content and type
-                        if (tx.tx_type && typeof tx.tx_type === 'object') {
-                            if (tx.tx_type.Message) {
-                                txTypeDisplay = '💬 Message';
-                                messageContent = `"${tx.tx_type.Message.content}"`;
-                            } else if (tx.tx_type.Trading) {
-                                txTypeDisplay = '💰 Trading';
-                                messageContent = `${tx.tx_type.Trading.quantity} ${tx.tx_type.Trading.asset} @ ${tx.tx_type.Trading.price}`;
-                            } else if (tx.tx_type === 'Transfer' || tx.tx_type.Transfer) {
-                                txTypeDisplay = '💸 Transfer';
-                                messageContent = `Transfer of ${tx.amount}`;
-                            }
-                        } else if (typeof tx.tx_type === 'string') {
-                            txTypeDisplay = tx.tx_type;
-                            if (tx.tx_type === 'Transfer') {
-                                messageContent = `Transfer of ${tx.amount}`;
-                            }
-                        }
-                        
-                        blocksHtml += `
-                            <div style="margin-bottom: 12px; padding: 10px; border-left: 3px solid #007bff; background: white; border-radius: 4px;">
-                                <div style="font-weight: bold; color: #007bff; margin-bottom: 5px;">📄 Transaction #${index + 1}</div>
-                                <div style="font-family: monospace; font-size: 10px; margin-bottom: 5px; color: #666;">ID: ${tx.id}</div>
-                                <div style="margin-bottom: 3px;"><strong>Type:</strong> ${txTypeDisplay}</div>
-                                <div style="margin-bottom: 3px;"><strong>From:</strong> <span style="font-family: monospace; font-size: 11px;">${tx.from}</span></div>
-                                <div style="margin-bottom: 3px;"><strong>To:</strong> <span style="font-family: monospace; font-size: 11px;">${tx.to}</span></div>
-                                <div style="margin-bottom: 3px;"><strong>Amount:</strong> ${tx.amount}</div>
-                                <div style="margin-bottom: 3px; padding: 8px; background: #e7f3ff; border-radius: 3px; border-left: 3px solid #007bff;"><strong>📨 Content:</strong> ${messageContent}</div>
-                                <div style="font-size: 11px; color: #666;"><strong>⏰ Time:</strong> ${new Date(tx.timestamp * 1000).toLocaleTimeString()}</div>
-                            </div>
-                        `;
-                    });
-                } else {
-                    blocksHtml += '<div style="color: #666; font-style: italic; padding: 10px;">No transactions in this block</div>';
-                }
-                
-                blocksHtml += `
+                <div class="trading-grid">
+                    <div class="order-book-section">
+                        <h3>Buy Orders (Bids)</h3>
+                        <div class="order-book-container">
+                            <table class="order-book">
+                                <thead>
+                                    <tr><th>Price (USD)</th><th>Quantity</th><th>Trader</th></tr>
+                                </thead>
+                                <tbody id="bids-tbody">
+                                    <tr><td colspan="3">No buy orders</td></tr>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
-                `;
-                
-                // Add pending transactions if any
-                if (pendingCount > 0) {
-                    blocksHtml += `
-                        <div style="margin-top: 20px; padding: 15px; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px;">
-                            <h4 style="margin-top: 0; color: #856404;">⏳ Pending Transactions (${pendingCount})</h4>
-                            <div style="font-size: 12px; color: #856404;">These transactions are waiting to be mined into the next block.</div>
-                            <button onclick="mineBlock()" style="margin-top: 10px; background: #ffc107; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer;">⛏️ Mine Pending Transactions</button>
+                    
+                    <div class="order-book-section">
+                        <h3>Sell Orders (Asks)</h3>
+                        <div class="order-book-container">
+                            <table class="order-book">
+                                <thead>
+                                    <tr><th>Price (USD)</th><th>Quantity</th><th>Trader</th></tr>
+                                </thead>
+                                <tbody id="asks-tbody">
+                                    <tr><td colspan="3">No sell orders</td></tr>
+                                </tbody>
+                            </table>
                         </div>
-                    `;
-                }
-                
-                // Add blockchain stats
-                try {
-                    const summary = blockchain.get_blockchain_summary();
-                    const stats = JSON.parse(summary);
-                    blocksHtml += `
-                        <div style="margin-top: 20px; padding: 15px; background: #d1ecf1; border: 1px solid #bee5eb; border-radius: 8px;">
-                            <h4 style="margin-top: 0; color: #0c5460;">📊 Blockchain Statistics</h4>
-                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; font-size: 12px;">
-                                <div><strong>Total Blocks:</strong> ${stats.blocks}</div>
-                                <div><strong>Pending TX:</strong> ${stats.pending}</div>
-                                <div><strong>Validators:</strong> ${stats.validators}</div>
-                                <div><strong>Messages:</strong> ${stats.messages || 0}</div>
-                                <div><strong>Trades:</strong> ${stats.trades || 0}</div>
-                                <div><strong>Transfers:</strong> ${stats.transfers || 0}</div>
-                            </div>
-                        </div>
-                    `;
-                } catch (e) {
-                    // Summary not available, skip stats
-                }
-                
-                blockchainDiv.innerHTML = blocksHtml;
-                
-            } catch (error) {
-                blockchainDiv.innerHTML = `
-                    <div style="color: #721c24; background: #f8d7da; padding: 15px; border-radius: 8px; border: 1px solid #f5c6cb;">
-                        <strong>❌ Error loading blockchain data:</strong> ${error.message}
                     </div>
-                `;
-                console.error('Blockchain display error:', error);
-            }
-        }
+                </div>
 
-        function getUserId() {
-            if (!window.userId) {
-                window.userId = 'user_' + Math.random().toString(36).substr(2, 9);
-            }
-            return window.userId;
-        }
+                <div class="trades-section">
+                    <h3>Recent Trades</h3>
+                    <div class="order-book-container">
+                        <table class="order-book">
+                            <thead>
+                                <tr><th>Time</th><th>Asset</th><th>Quantity</th><th>Price</th><th>Buyer</th><th>Seller</th></tr>
+                            </thead>
+                            <tbody id="trades-tbody">
+                                <tr><td colspan="6">No trades yet</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
 
-        // Event listeners
-        document.getElementById('connect-btn').addEventListener('click', async () => {
-            if (mesh.connected) {
-                mesh.ws.close();
-            } else {
-                await mesh.connect();
-            }
-        });
+                <div class="blockchain-display">
+                    <h3>Order Book Blockchain Activity</h3>
+                    <div class="info-banner">
+                        <strong>Order Matching:</strong> Successful trades are permanently recorded on blockchain
+                    </div>
+                    <div id="blockchain-orderbook">Loading blockchain data...</div>
+                </div>
+            </div>
 
-        document.getElementById('join-network-btn').addEventListener('click', () => {
-            const networkId = mesh.getSelectedNetwork();
-            if (networkId) {
-                mesh.joinNetwork(networkId);
-            } else {
-                log('Please select or enter a network name');
-            }
-        });
+            <!-- Smart Contracts Tab -->
+            <div id="contracts" class="tab-panel">
+                <h2>Smart Contracts</h2>
+                <div id="contract-interface">
+                    <div class="info-banner">
+                        Smart contract functionality will be available in future updates.
+                    </div>
+                </div>
 
-        document.getElementById('refresh-networks-btn').addEventListener('click', () => {
-            if (mesh) {
-                mesh.refreshNetworkList();
-            }
-        });
+                <div class="blockchain-display">
+                    <h3>Smart Contract Blockchain Activity</h3>
+                    <div class="info-banner">
+                        <strong>Contract Transactions:</strong> All smart contract interactions are recorded on blockchain
+                    </div>
+                    <div id="blockchain-contracts">Loading blockchain data...</div>
+                </div>
+            </div>
 
-        document.getElementById('discover-btn').addEventListener('click', () => {
-            if (mesh) {
-                mesh.send({ type: 'peers', peers: [] });
-                log('Discovering peers in network...');
-            }
-        });
+            <!-- Contract Editor Tab -->
+            <div id="editor" class="tab-panel">
+                <h2>Contract Editor</h2>
+                <div id="contract-editor-interface">
+                    <div class="info-banner">
+                        Contract editor functionality will be available in future updates.
+                    </div>
+                </div>
 
-        document.getElementById('connect-all-btn').addEventListener('click', () => {
-            if (mesh && mesh.availablePeers.length > 0) {
-                mesh.connectToAllPeers();
-            } else {
-                log('No peers available to connect to');
-            }
-        });
+                <div class="blockchain-display">
+                    <h3>Contract Editor Blockchain Activity</h3>
+                    <div class="info-banner">
+                        <strong>Contract Deployment:</strong> Contract compilation and deployment creates blockchain transactions
+                    </div>
+                    <div id="blockchain-editor">Loading blockchain data...</div>
+                </div>
+            </div>
+        </div>
+    </div>
 
-        // Add Enter key support for message input
-        document.getElementById('message-input').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter' && !document.getElementById('message-btn').disabled) {
-                sendMessage();
-            }
-        });
-
-        // Initialize the application
-        initApp();
-    </script>
+    <!-- JavaScript Modules -->
+    <script type="module" src="js/wasm-loader.js"></script>
+    <script type="module" src="js/mesh-manager.js"></script>
+    <script type="module" src="js/trading.js"></script>
+    <script type="module" src="js/blockchain-ui.js"></script>
+    <script type="module" src="js/main.js"></script>
 </body>
 </html>
