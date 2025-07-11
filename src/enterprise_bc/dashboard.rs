@@ -1,4 +1,4 @@
-// src/enterprise_bc/dashboard.rs - Keep the existing dashboard
+// src/enterprise_bc/dashboard.rs - COMPLETE WORKING VERSION
 use warp::Filter;
 
 pub async fn start_dashboard(port: u16) {
@@ -20,7 +20,7 @@ const DASHBOARD_HTML: &str = r#"
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Enterprise Blockchain Dashboard - Proof of Stake</title>
+    <title>Enterprise Blockchain Dashboard - Cross-Network Trading</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -196,13 +196,34 @@ const DASHBOARD_HTML: &str = r#"
             font-weight: bold;
             margin-left: 10px;
         }
+        .trading-summary {
+            background: #e8f5e9;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 4px solid #4caf50;
+        }
+        .trade-execution {
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 4px;
+        }
+        .order-details {
+            background: #f0f8ff;
+            padding: 10px;
+            border-radius: 4px;
+            border-left: 3px solid #007bff;
+            margin-top: 8px;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
             <h1>Enterprise Blockchain Dashboard</h1>
-            <p>Proof of Stake Consensus - Tenant Network Aggregation <span class="pos-badge">PoS</span></p>
+            <p>Cross-Network Order Matching System <span class="pos-badge">PoS</span></p>
         </div>
 
         <div class="config-panel">
@@ -239,7 +260,12 @@ const DASHBOARD_HTML: &str = r#"
         </div>
 
         <div class="section">
-            <h2>Recent Tenant Blocks with Transaction Details</h2>
+            <h2>Cross-Network Order Matching Status</h2>
+            <div id="order-book-status">Loading...</div>
+        </div>
+
+        <div class="section">
+            <h2>Recent Tenant Blocks with Enhanced Trading Details</h2>
             <div id="recent-blocks">Loading...</div>
         </div>
 
@@ -292,7 +318,8 @@ const DASHBOARD_HTML: &str = r#"
                 await Promise.all([
                     loadValidatorStatus(),
                     loadBlocksWithDetails(),
-                    loadTenants()
+                    loadTenants(),
+                    loadOrderBookStatus()
                 ]);
             } catch (error) {
                 console.error('Error loading dashboard:', error);
@@ -313,6 +340,7 @@ const DASHBOARD_HTML: &str = r#"
                 console.error('Error loading validator status:', error);
             }
         }
+
         function parseTransactionData(txString) {
             try {
                 const tx = JSON.parse(txString);
@@ -329,13 +357,36 @@ const DASHBOARD_HTML: &str = r#"
                     const quantity = (trading.quantity / 100).toFixed(2);
                     const price = (trading.price / 100).toFixed(2);
                     
-                    // Determine order type
-                    const orderType = tx.to === "trading_contract" ? "BUY" : "SELL";
+                    const orderType = tx.id.includes("buy_") ? "BUY" : "SELL";
                     
                     typeInfo = {
                         type: `${orderType} Order`,
-                        content: `${orderType} ORDER: ${quantity} ${trading.asset} @ $${price}`,
-                        class: 'transaction-type trading'
+                        content: `${orderType}: ${quantity} ${trading.asset} @ $${price}`,
+                        class: 'transaction-type trading',
+                        orderDetails: {
+                            side: orderType,
+                            asset: trading.asset,
+                            quantity: quantity,
+                            price: price,
+                            trader: tx.from.substring(0, 12) + "..."
+                        }
+                    };
+                } else if (tx.tx_type && tx.tx_type.TradeExecution) {
+                    const trade = tx.tx_type.TradeExecution;
+                    const quantity = (trade.quantity / 100).toFixed(2);
+                    const price = (trade.price / 100).toFixed(2);
+                    
+                    typeInfo = {
+                        type: 'Trade Execution',
+                        content: `EXECUTED: ${quantity} ${trade.asset} @ $${price}`,
+                        class: 'transaction-type execution',
+                        tradeDetails: {
+                            asset: trade.asset,
+                            quantity: quantity,
+                            price: price,
+                            buyer: trade.buyer.substring(0, 12) + "...",
+                            seller: trade.seller.substring(0, 12) + "..."
+                        }
                     };
                 } else if (tx.tx_type === 'Transfer') {
                     typeInfo = {
@@ -349,10 +400,11 @@ const DASHBOARD_HTML: &str = r#"
             } catch (e) {
                 return {
                     tx: { id: txString, from: 'unknown', to: 'unknown', amount: 0 },
-                    typeInfo: { type: 'Raw ID', content: txString, class: 'transaction-type' }
+                    typeInfo: { type: 'Raw Data', content: txString.substring(0, 50) + "...", class: 'transaction-type' }
                 };
             }
         }
+
         async function loadBlocksWithDetails() {
             try {
                 const response = await fetch(`${API_BASE}/api/blocks?limit=10`);
@@ -362,7 +414,7 @@ const DASHBOARD_HTML: &str = r#"
                 container.innerHTML = '';
 
                 if (!blocks || blocks.length === 0) {
-                    container.innerHTML = '<div>No tenant blocks found - Check data flow</div>';
+                    container.innerHTML = '<div>No tenant blocks found</div>';
                     return;
                 }
 
@@ -375,41 +427,77 @@ const DASHBOARD_HTML: &str = r#"
                     const networkId = block.network_id || 'Unknown';
 
                     let transactionsHtml = '';
+                    let orderSummary = { buys: 0, sells: 0, executions: 0 };
+
                     if (transactions.length > 0) {
+                        const txElements = transactions.map((txString, txIndex) => {
+                            const { tx, typeInfo } = parseTransactionData(txString);
+                            
+                            if (typeInfo.type.includes('BUY')) orderSummary.buys++;
+                            if (typeInfo.type.includes('SELL')) orderSummary.sells++;
+                            if (typeInfo.type.includes('Execution')) orderSummary.executions++;
+                            
+                            let contentHtml = '';
+                            if (typeInfo.orderDetails) {
+                                contentHtml = `
+                                    <div class="order-details">
+                                        <strong>${typeInfo.orderDetails.side} ORDER</strong><br>
+                                        Asset: ${typeInfo.orderDetails.asset}<br>
+                                        Quantity: ${typeInfo.orderDetails.quantity}<br>
+                                        Price: $${typeInfo.orderDetails.price}<br>
+                                        Trader: ${typeInfo.orderDetails.trader}
+                                    </div>
+                                `;
+                            } else if (typeInfo.tradeDetails) {
+                                contentHtml = `
+                                    <div class="trade-execution">
+                                        <strong>TRADE EXECUTED</strong><br>
+                                        Asset: ${typeInfo.tradeDetails.asset}<br>
+                                        Quantity: ${typeInfo.tradeDetails.quantity}<br>
+                                        Price: $${typeInfo.tradeDetails.price}<br>
+                                        Buyer: ${typeInfo.tradeDetails.buyer}<br>
+                                        Seller: ${typeInfo.tradeDetails.seller}
+                                    </div>
+                                `;
+                            } else if (typeInfo.type === 'Message') {
+                                contentHtml = `<div class="message-content">${typeInfo.content}</div>`;
+                            } else {
+                                contentHtml = `<div class="message-content">${typeInfo.content}</div>`;
+                            }
+                            
+                            return `
+                                <div class="transaction">
+                                    <div class="transaction-header">
+                                        <span class="${typeInfo.class}">${typeInfo.type}</span>
+                                        Transaction #${txIndex + 1}
+                                    </div>
+                                    <div class="transaction-details">
+                                        <strong>ID:</strong> ${tx.id || 'N/A'}<br>
+                                        <strong>From:</strong> ${(tx.from || 'unknown').substring(0, 12)}...<br>
+                                        <strong>Time:</strong> ${tx.timestamp ? new Date(tx.timestamp * 1000).toLocaleTimeString() : 'N/A'}
+                                    </div>
+                                    ${contentHtml}
+                                </div>
+                            `;
+                        }).join('');
+
+                        let orderSummaryHtml = '';
+                        if (orderSummary.buys > 0 || orderSummary.sells > 0 || orderSummary.executions > 0) {
+                            orderSummaryHtml = `
+                                <div class="trading-summary">
+                                    <strong>Trading Activity:</strong> 
+                                    ${orderSummary.buys} Buy Orders, 
+                                    ${orderSummary.sells} Sell Orders, 
+                                    ${orderSummary.executions} Executions
+                                </div>
+                            `;
+                        }
+
                         transactionsHtml = `
+                            ${orderSummaryHtml}
                             <div class="transactions-section">
-                                <strong>📝 Transaction Details:</strong>
-                                ${transactions.map((txString, txIndex) => {
-                                    const { tx, typeInfo } = parseTransactionData(txString);
-                                    
-                                    let contentHtml = '';
-                                    if (typeInfo.type === 'Message') {
-                                        contentHtml = `<div class="message-content">💬 "${typeInfo.content}"</div>`;
-                                    } else if (typeInfo.type === 'Trading') {
-                                        contentHtml = `<div class="message-content">💰 ${typeInfo.content}</div>`;
-                                    } else if (typeInfo.type === 'Transfer') {
-                                        contentHtml = `<div class="message-content">💸 ${typeInfo.content}</div>`;
-                                    } else {
-                                        contentHtml = `<div class="message-content">📄 ${typeInfo.content}</div>`;
-                                    }
-                                    
-                                    return `
-                                        <div class="transaction">
-                                            <div class="transaction-header">
-                                                <span class="${typeInfo.class}">${typeInfo.type}</span>
-                                                Transaction #${txIndex + 1}
-                                            </div>
-                                            <div class="transaction-details">
-                                                <strong>ID:</strong> ${tx.id || 'N/A'}<br>
-                                                <strong>From:</strong> ${(tx.from || 'unknown').substring(0, 12)}...<br>
-                                                <strong>To:</strong> ${(tx.to || 'unknown').substring(0, 12)}...<br>
-                                                <strong>Amount:</strong> ${tx.amount || 0}<br>
-                                                <strong>Time:</strong> ${tx.timestamp ? new Date(tx.timestamp * 1000).toLocaleTimeString() : 'N/A'}
-                                            </div>
-                                            ${contentHtml}
-                                        </div>
-                                    `;
-                                }).join('')}
+                                <strong>Transaction Details:</strong>
+                                ${txElements}
                             </div>
                         `;
                     } else {
@@ -422,12 +510,12 @@ const DASHBOARD_HTML: &str = r#"
 
                     blockDiv.innerHTML = `
                         <div class="block-header">
-                            <span>🏆 Tenant Block #${block.block_id || '0'} - Network: ${networkId}</span>
+                            <span>Tenant Block #${block.block_id || '0'} - Network: ${networkId}</span>
                             <span class="pos-badge">PoS</span>
                         </div>
                         
                         <div class="block-details">
-                            <div><strong>Hash:</strong> ${blockHash.length > 16 ? blockHash.substring(0, 16) + '...' : blockHash}</div>
+                            <div><strong>Hash:</strong> ${blockHash.substring(0, 16)}...</div>
                             <div><strong>Timestamp:</strong> ${new Date((block.timestamp || 0) * 1000).toLocaleString()}</div>
                             <div><strong>Transactions:</strong> ${transactions.length}</div>
                             <div><strong>Consensus:</strong> Proof of Stake</div>
@@ -441,6 +529,56 @@ const DASHBOARD_HTML: &str = r#"
             } catch (error) {
                 document.getElementById('recent-blocks').innerHTML =
                     `<div style="color: red;">Failed to load blocks: ${error.message}</div>`;
+            }
+        }
+
+        async function loadOrderBookStatus() {
+            try {
+                const response = await fetch(`${API_BASE}/api/order-book-status`);
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    const container = document.getElementById('order-book-status');
+                    
+                    let orderBookHtml = '<h4>Cross-Network Order Book</h4>';
+                    
+                    if (data.order_book && Object.keys(data.order_book).length > 0) {
+                        for (const [asset, summary] of Object.entries(data.order_book)) {
+                            orderBookHtml += `
+                                <div class="trading-summary">
+                                    <strong>${asset}:</strong> 
+                                    ${summary.bids} Bids, ${summary.asks} Asks 
+                                    (${summary.total_orders} total orders)
+                                </div>
+                            `;
+                        }
+                    } else {
+                        orderBookHtml += '<div>No active orders in cross-network order book</div>';
+                    }
+                    
+                    if (data.recent_trades && data.recent_trades.length > 0) {
+                        orderBookHtml += '<h4>Recent Cross-Network Trades</h4>';
+                        data.recent_trades.slice(-5).forEach(trade => {
+                            const quantity = (trade.quantity / 100).toFixed(2);
+                            const price = (trade.price / 100).toFixed(2);
+                            orderBookHtml += `
+                                <div class="trade-execution">
+                                    <strong>Trade:</strong> ${quantity} ${trade.asset} @ $${price}<br>
+                                    <strong>Networks:</strong> ${trade.buyer_network} ↔ ${trade.seller_network}<br>
+                                    <strong>Time:</strong> ${new Date(trade.timestamp * 1000).toLocaleString()}
+                                </div>
+                            `;
+                        });
+                    }
+                    
+                    container.innerHTML = orderBookHtml;
+                } else {
+                    document.getElementById('order-book-status').innerHTML = 
+                        '<div>Order book status not available</div>';
+                }
+            } catch (error) {
+                document.getElementById('order-book-status').innerHTML =
+                    `<div style="color: red;">Failed to load order book: ${error.message}</div>`;
             }
         }
 
@@ -484,8 +622,8 @@ const DASHBOARD_HTML: &str = r#"
             }
         }
 
-        // Auto-refresh every 30 seconds
-        setInterval(loadDashboard, 30000);
+        // Auto-refresh every 10 seconds for trading updates
+        setInterval(loadDashboard, 10000);
 
         // Initialize
         initializeApiUrl();

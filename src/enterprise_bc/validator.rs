@@ -1,46 +1,47 @@
+// src/enterprise_bc/validator.rs
 use crate::blockchain::{Blockchain, TenantBlockchainUpdate};
 use crate::enterprise_bc::api;
+use crate::enterprise_bc::order_engine::{EnterpriseOrderEngine, Trade};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio::time::{interval, Duration};
-use tracing::{info, warn};
 
 pub struct Validator {
     pub id: String,
     pub port: u16,
     pub blockchain: Arc<RwLock<Blockchain>>,
-    pub stake: u64,  // Keep u64 for stake amounts
+    pub order_engine: Arc<RwLock<EnterpriseOrderEngine>>,
+    pub stake: u64,
     pub tracker_url: Option<String>,
 }
 
 impl Validator {
     pub async fn new(id: String, port: u16, initial_stake: u64) -> Self {
         let mut blockchain = Blockchain::new();
-        
-        // Add self as validator with initial stake - convert u64 to u32 for the interface
         blockchain.add_validator(id.clone(), initial_stake as u32);
         
-        // Get tracker URL from environment for cross-network trading
         let tracker_url = std::env::var("TRACKER_URL").ok();
         if let Some(ref url) = tracker_url {
-            info!("Tracker URL configured: {} (for cross-network trading)", url);
+            println!("Tracker URL configured: {} (for cross-network trading)", url);
         } else {
-            warn!("No TRACKER_URL provided - order book updates won't be broadcast");
+            println!("No TRACKER_URL provided - cross-network trades won't be broadcast");
         }
         
         Validator {
             id,
             port,
             blockchain: Arc::new(RwLock::new(blockchain)),
+            order_engine: Arc::new(RwLock::new(EnterpriseOrderEngine::new())),
             stake: initial_stake,
             tracker_url,
         }
     }
     
     pub async fn start(self) {
-        info!("Starting validator {} on port {} with stake {}", self.id, self.port, self.stake);
+        println!("Starting validator {} with order matching engine", self.id);
         
         let blockchain = self.blockchain.clone();
+        let order_engine = self.order_engine.clone();
         let validator_id = self.id.clone();
         
         // Start PoS validation loop
@@ -52,138 +53,112 @@ impl Validator {
         
         // Start API server
         let api_blockchain = blockchain.clone();
+        let api_order_engine = order_engine.clone();
+        let api_tracker_url = self.tracker_url.clone();
         let api_handle = tokio::spawn(async move {
-            api::start_api_server(self.port, api_blockchain).await;
+            api::start_api_server(self.port, api_blockchain, api_order_engine, api_tracker_url).await;
         });
         
-        info!("Validator {} ready for Proof of Stake consensus", self.id);
+        println!("Enterprise validator ready for cross-network order matching");
         
-        // Wait for all services
         tokio::select! {
-            _ = validation_handle => warn!("Validation stopped"),
-            _ = api_handle => warn!("API server stopped"),
+            _ = validation_handle => println!("Validation stopped"),
+            _ = api_handle => println!("API server stopped"),
         }
     }
     
-    // Proof of Stake validation loop
     async fn pos_validation_loop(blockchain: Arc<RwLock<Blockchain>>, validator_id: String) {
         let mut timer = interval(Duration::from_secs(10));
         
         loop {
             timer.tick().await;
             
-            // Try to create a block if we have pending transactions
             {
                 let mut bc = blockchain.write().await;
-                let pending_count = bc.get_pending_count();  // Now returns u32
+                let pending_count = bc.get_pending_count();
                 if pending_count > 0 {
                     if bc.mine_block() {
-                        info!("Validator {} created block via Proof of Stake", validator_id);
+                        println!("Validator {} created block via PoS", validator_id);
                     }
                 }
             }
         }
     }
     
-    // Process tenant blockchain updates (keep for dashboard compatibility)
-    pub async fn process_tenant_update(&self, update: TenantBlockchainUpdate) -> bool {
-        info!("Processing tenant update from network: {}", update.network_id);
+    pub async fn process_tenant_update(&self, update: TenantBlockchainUpdate) -> Vec<Trade> {
+        println!("Processing {} blocks from network {}", 
+              update.new_blocks.len(), update.network_id);
+        
+        let mut all_trades = Vec::new();
         
         {
             let mut bc = self.blockchain.write().await;
-            
-            // Add tenant blocks for dashboard display
             bc.add_tenant_blocks(&update);
-            
-            info!("Stored {} blocks from {} for enterprise tracking", 
-                  update.new_blocks.len(), update.network_id);
         }
         
-        // Broadcast update back to tracker for cross-network trading
-        if let Some(ref tracker_url) = self.tracker_url {
-            self.broadcast_to_tracker(&update, tracker_url).await;
+        // Process orders and match them
+        {
+            let mut engine = self.order_engine.write().await;
+            for block in &update.new_blocks {
+                let trades = engine.process_block(block);
+                all_trades.extend(trades);
+            }
         }
         
-        true
+        // Broadcast matched trades back to networks
+        if !all_trades.is_empty() {
+            println!("Generated {} cross-network trades", all_trades.len());
+            self.broadcast_trades_to_networks(&all_trades).await;
+        }
+        
+        all_trades
     }
     
-    // Broadcast blockchain updates back to tracker for cross-network trading
-    async fn broadcast_to_tracker(&self, update: &TenantBlockchainUpdate, tracker_url: &str) {
-        let client = reqwest::Client::new();
-        let url = format!("{}/api/enterprise-update", tracker_url);
-        
-        let enterprise_update = serde_json::json!({
-            "type": "enterprise_blockchain_update",
-            "network_id": update.network_id,
-            "blocks": update.new_blocks,
-            "timestamp": update.timestamp,
-            "validator_id": self.id
-        });
-        
-        match client.post(&url).json(&enterprise_update).send().await {
-            Ok(response) => {
-                if response.status().is_success() {
-                    info!("✅ Broadcast update back to tracker for network: {}", update.network_id);
-                } else {
-                    warn!("Failed to broadcast to tracker: HTTP {}", response.status());
+    async fn broadcast_trades_to_networks(&self, trades: &[Trade]) {
+        if let Some(ref tracker_url) = self.tracker_url {
+            for trade in trades {
+                let trade_notification = serde_json::json!({
+                    "type": "cross_network_trade",
+                    "trade_id": trade.trade_id,
+                    "buyer_network": trade.buyer_network,
+                    "seller_network": trade.seller_network,
+                    "asset": trade.asset,
+                    "quantity": trade.quantity,
+                    "price": trade.price,
+                    "buyer": trade.buyer,
+                    "seller": trade.seller,
+                    "timestamp": trade.timestamp
+                });
+                
+                let client = reqwest::Client::new();
+                let url = format!("{}/api/cross-network-trade", tracker_url);
+                
+                match client.post(&url).json(&trade_notification).send().await {
+                    Ok(response) => {
+                        if response.status().is_success() {
+                            println!("Broadcast trade {} to networks {} and {}", 
+                                  trade.trade_id, trade.buyer_network, trade.seller_network);
+                        } else {
+                            println!("Failed to broadcast trade: HTTP {}", response.status());
+                        }
+                    }
+                    Err(e) => {
+                        println!("Failed to broadcast trade: {}", e);
+                    }
                 }
             }
-            Err(e) => {
-                warn!("Failed to broadcast to tracker: {}", e);
-            }
         }
     }
     
-    pub async fn get_blockchain_status(&self) -> serde_json::Value {
-        let blockchain = self.blockchain.read().await;
-        
-        // Get tenant summaries for dashboard
-        let tenant_summaries = blockchain.get_tenant_summaries();
-        let total_tenant_blocks = blockchain.get_recent_tenant_blocks(1000).len();
-        
-        // Use the new u32 methods
-        let pending_count = blockchain.get_pending_count();  // u32
-        let validator_count = blockchain.get_validator_count();  // u32
+    pub async fn get_order_book_status(&self) -> serde_json::Value {
+        let engine = self.order_engine.read().await;
+        let order_book_summary = engine.get_order_book_summary();
+        let recent_trades = engine.get_recent_trades(10);
         
         serde_json::json!({
-            "validator_id": self.id,
-            "stake": self.stake,
-            "height": total_tenant_blocks,
-            "total_blocks": total_tenant_blocks,
-            "total_transactions": pending_count,
-            "active_validators": validator_count,
-            "active_tenants": tenant_summaries.len(),
-            "tenant_blocks": total_tenant_blocks,
-            "consensus": "proof_of_stake",
-            "chain_health": "healthy",
-            "validator_status": "online"
+            "order_book": order_book_summary,
+            "recent_trades": recent_trades,
+            "total_recent_trades": recent_trades.len()
         })
-    }
-}
-
-// Keep the tenant blockchain update handler for dashboard
-pub async fn handle_tenant_blockchain_update(
-    update: TenantBlockchainUpdate,
-    validator: Arc<Validator>
-) -> Result<impl warp::Reply, warp::Rejection> {
-    info!("Received blockchain update from network: {}", update.network_id);
-    
-    // Process the update for enterprise tracking
-    let success = validator.process_tenant_update(update.clone()).await;
-    
-    if success {
-        Ok(warp::reply::json(&serde_json::json!({
-            "status": "success",
-            "message": "Tenant blockchain update processed",
-            "network_id": update.network_id,
-            "new_blocks": update.new_blocks.len(),
-            "immediate_processing": true
-        })))
-    } else {
-        Ok(warp::reply::json(&serde_json::json!({
-            "status": "error",
-            "message": "Failed to process tenant blockchain update",
-            "network_id": update.network_id
-        })))
     }
 }

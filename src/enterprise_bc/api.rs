@@ -1,22 +1,47 @@
+// src/enterprise_bc/api.rs - SIMPLIFIED WORKING VERSION
 use crate::blockchain::{Blockchain, TenantBlockchainUpdate};
+use crate::enterprise_bc::order_engine::EnterpriseOrderEngine;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use warp::Filter;
-use tracing::{info, warn};
 
-pub async fn start_api_server(port: u16, blockchain: Arc<RwLock<Blockchain>>) {
-    info!("Starting Enterprise API server on port {}", port);
+pub async fn start_api_server(
+    port: u16, 
+    blockchain: Arc<RwLock<Blockchain>>,
+    order_engine: Arc<RwLock<EnterpriseOrderEngine>>,
+    tracker_url: Option<String>
+) {
+    println!("Starting Enterprise API server with order matching on port {}", port);
 
     let blockchain_filter = warp::any().map(move || blockchain.clone());
+    let order_engine_filter = warp::any().map(move || order_engine.clone());
+    let tracker_filter = warp::any().map(move || tracker_url.clone());
 
-    // Keep the tenant blockchain update endpoint for dashboard
+    // Main endpoint for processing tenant blockchain updates
     let tenant_blockchain_update = warp::path("api")
         .and(warp::path("tenant-blockchain-update"))
         .and(warp::post())
         .and(warp::body::json())
         .and(blockchain_filter.clone())
+        .and(order_engine_filter.clone())
+        .and(tracker_filter.clone())
         .and_then(handle_tenant_blockchain_update);
 
+    // Order book status endpoint
+    let order_book_status = warp::path("api")
+        .and(warp::path("order-book-status"))
+        .and(warp::get())
+        .and(order_engine_filter.clone())
+        .and_then(handle_order_book_status);
+
+    // Debug endpoint to see all orders
+    let debug_orders = warp::path("api")
+        .and(warp::path("debug-orders"))
+        .and(warp::get())
+        .and(order_engine_filter.clone())
+        .and_then(handle_debug_orders);
+
+    // Existing endpoints
     let status = warp::path("api")
         .and(warp::path("status"))
         .and(warp::get())
@@ -51,22 +76,16 @@ pub async fn start_api_server(port: u16, blockchain: Arc<RwLock<Blockchain>>) {
         .allow_headers(vec!["content-type"])
         .allow_methods(vec!["GET", "POST", "OPTIONS"]);
 
-    let delta_sync = warp::path("api")
-        .and(warp::path("delta-sync"))
-        .and(warp::post())
-        .and(warp::body::json())
-        .and(blockchain_filter.clone())
-        .and_then(handle_delta_sync);
-
     let routes = tenant_blockchain_update
+        .or(order_book_status)
+        .or(debug_orders)
         .or(status)
         .or(blocks)
         .or(tenants)
-        .or(delta_sync)
         .or(health)
         .with(cors);
 
-    info!("Enterprise API server ready on http://0.0.0.0:{}", port);
+    println!("Enterprise API server ready on http://0.0.0.0:{}", port);
     
     warp::serve(routes)
         .run(([0, 0, 0, 0], port))
@@ -80,74 +99,150 @@ struct BlocksQuery {
 
 async fn handle_tenant_blockchain_update(
     update: TenantBlockchainUpdate,
-    blockchain: Arc<RwLock<Blockchain>>
+    blockchain: Arc<RwLock<Blockchain>>,
+    order_engine: Arc<RwLock<EnterpriseOrderEngine>>,
+    tracker_url: Option<String>
 ) -> Result<impl warp::Reply, warp::Rejection> {
-    info!("Received tenant blockchain update from network: {}", update.network_id);
-    info!("Update contains {} blocks", update.new_blocks.len());
+    println!("=== ENTERPRISE BC: Processing tenant update from network: {} ===", update.network_id);
+    println!("Blocks to process: {}", update.new_blocks.len());
     
     let blocks_count = update.new_blocks.len();
     let mut transactions_count = 0;
+    let mut orders_processed = 0;
     
-    for block in &update.new_blocks {
-        transactions_count += block.transactions.len();
-    }
-    
+    // Store blocks in blockchain first
     {
         let mut bc = blockchain.write().await;
         bc.add_tenant_blocks(&update);
-        info!("Stored tenant blocks for dashboard display");
+        println!("Stored blocks in enterprise blockchain");
     }
     
-    info!("Processed {} blocks with {} transactions from {}", 
-          blocks_count, transactions_count, update.network_id);
+    // Process each block for order matching
+    let mut all_trades = Vec::new();
+    {
+        let mut engine = order_engine.write().await;
+        
+        for block in &update.new_blocks {
+            transactions_count += block.transactions.len();
+            println!("Processing block {} with {} transactions", block.block_id, block.transactions.len());
+            
+            // Count and process trading transactions
+            for tx_string in &block.transactions {
+                if let Ok(tx) = serde_json::from_str::<crate::blockchain::Transaction>(tx_string) {
+                    if matches!(tx.tx_type, crate::blockchain::TransactionType::Trading { .. }) {
+                        orders_processed += 1;
+                        println!("Found trading transaction: {}", tx.id);
+                    }
+                }
+            }
+            
+            let block_trades = engine.process_block(block);
+            if !block_trades.is_empty() {
+                println!("Block generated {} trades", block_trades.len());
+                all_trades.extend(block_trades);
+            }
+        }
+    }
+    
+    // Send trade notifications back to networks
+    if !all_trades.is_empty() {
+        println!("Broadcasting {} cross-network trades", all_trades.len());
+        
+        if let Some(ref tracker_url) = tracker_url {
+            for trade in &all_trades {
+                println!("Sending trade notification: {} {} {} @ {} between {} and {}", 
+                         trade.trade_id, trade.quantity, trade.asset, trade.price,
+                         trade.buyer_network, trade.seller_network);
+                         
+                send_trade_to_tracker(trade, tracker_url).await;
+            }
+        } else {
+            println!("No tracker URL configured - trades not broadcast");
+        }
+    } else {
+        println!("No trades generated from this update");
+    }
+    
+    println!("=== PROCESSING COMPLETE: {} blocks, {} transactions, {} orders, {} trades ===", 
+          blocks_count, transactions_count, orders_processed, all_trades.len());
     
     Ok(warp::reply::json(&serde_json::json!({
         "status": "success",
-        "message": "Tenant blocks processed for enterprise tracking",
+        "message": "Tenant blocks processed with order matching",
         "network_id": update.network_id,
         "blocks_processed": blocks_count,
-        "transactions_processed": transactions_count
+        "transactions_processed": transactions_count,
+        "orders_processed": orders_processed,
+        "trades_executed": all_trades.len(),
+        "trades": all_trades
     })))
 }
 
-async fn handle_delta_sync(
-    sync_payload: serde_json::Value,
-    blockchain: Arc<RwLock<Blockchain>>
-) -> Result<impl warp::Reply, warp::Rejection> {
-    info!("Received delta sync from edge network");
-
-    if let Some(sync_data) = sync_payload["sync_data"].as_object() {
-        let network_id = sync_payload["network_id"].as_str().unwrap_or("unknown");
-
-        // Create longer-lived empty vectors to fix borrowing issue
-        let empty_blocks = vec![];
-        let empty_txs = vec![];
-
-        let new_blocks = sync_data.get("new_blocks")
-            .and_then(|b| b.as_array())
-            .unwrap_or(&empty_blocks);
-
-        let pending_txs = sync_data.get("pending_transactions")
-            .and_then(|t| t.as_array())
-            .unwrap_or(&empty_txs);
-
-        info!("Processing delta sync: {} new blocks, {} pending transactions from network {}",
-              new_blocks.len(), pending_txs.len(), network_id);
-
-        Ok(warp::reply::json(&serde_json::json!({
-            "status": "success",
-            "message": "Delta sync processed",
-            "network_id": network_id,
-            "blocks_processed": new_blocks.len(),
-            "transactions_processed": pending_txs.len()
-        })))
-    } else {
-        warn!("Invalid delta sync payload format");
-        Ok(warp::reply::json(&serde_json::json!({
-            "status": "error",
-            "message": "Invalid sync payload format"
-        })))
+async fn send_trade_to_tracker(trade: &crate::enterprise_bc::order_engine::Trade, tracker_url: &str) {
+    let trade_notification = serde_json::json!({
+        "type": "cross_network_trade",
+        "trade_id": trade.trade_id,
+        "buyer_network": trade.buyer_network,
+        "seller_network": trade.seller_network,
+        "asset": trade.asset,
+        "quantity": trade.quantity,
+        "price": trade.price,
+        "buyer": trade.buyer,
+        "seller": trade.seller,
+        "timestamp": trade.timestamp
+    });
+    
+    let client = reqwest::Client::new();
+    let url = format!("{}/api/cross-network-trade", tracker_url);
+    
+    println!("Sending trade notification to tracker: {}", url);
+    
+    match client.post(&url).json(&trade_notification).send().await {
+        Ok(response) => {
+            if response.status().is_success() {
+                println!("Successfully sent trade {} to tracker", trade.trade_id);
+            } else {
+                println!("Failed to send trade to tracker: HTTP {}", response.status());
+            }
+        }
+        Err(e) => {
+            println!("Failed to send trade to tracker: {}", e);
+        }
     }
+}
+
+async fn handle_order_book_status(
+    order_engine: Arc<RwLock<EnterpriseOrderEngine>>
+) -> Result<impl warp::Reply, warp::Rejection> {
+    let engine = order_engine.read().await;
+    
+    let order_book_summary = engine.get_order_book_summary();
+    let recent_trades = engine.get_recent_trades(20);
+    
+    println!("Order book status requested - {} recent trades", recent_trades.len());
+    
+    let response = serde_json::json!({
+        "order_book": order_book_summary,
+        "recent_trades": recent_trades,
+        "total_recent_trades": recent_trades.len(),
+        "timestamp": std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+    });
+    
+    Ok(warp::reply::json(&response))
+}
+
+async fn handle_debug_orders(
+    order_engine: Arc<RwLock<EnterpriseOrderEngine>>
+) -> Result<impl warp::Reply, warp::Rejection> {
+    let engine = order_engine.read().await;
+    let all_orders = engine.get_all_orders();
+    
+    println!("Debug orders requested");
+    
+    Ok(warp::reply::json(&all_orders))
 }
 
 async fn handle_status(
@@ -157,10 +252,8 @@ async fn handle_status(
     
     let tenant_summaries = bc.get_tenant_summaries();
     let total_tenant_blocks = bc.get_recent_tenant_blocks(1000).len();
-    
-    // Use the new u32 methods  
-    let pending_count = bc.get_pending_count();  // u32
-    let validator_count = bc.get_validator_count();  // u32
+    let pending_count = bc.get_pending_count();
+    let validator_count = bc.get_validator_count();
     
     let status = serde_json::json!({
         "height": total_tenant_blocks,
@@ -173,7 +266,6 @@ async fn handle_status(
         "consensus": "proof_of_stake"
     });
     
-    info!("Status request - tenant blocks: {}", total_tenant_blocks);
     Ok(warp::reply::json(&status))
 }
 
@@ -182,18 +274,8 @@ async fn handle_blocks(
     blockchain: Arc<RwLock<Blockchain>>
 ) -> Result<impl warp::Reply, warp::Rejection> {
     let limit = query.limit.unwrap_or(20);
-    info!("Blocks request with limit: {}", limit);
-    
     let bc = blockchain.read().await;
     let blocks = bc.get_recent_tenant_blocks(limit);
-    info!("Returning {} tenant blocks", blocks.len());
-    
-    if blocks.is_empty() {
-        warn!("No tenant blocks found! Check:");
-        warn!("1. Tracker sending updates?");
-        warn!("2. Browser clients creating transactions?");
-        warn!("3. Network connectivity?");
-    }
     
     Ok(warp::reply::json(&blocks))
 }
@@ -203,7 +285,6 @@ async fn handle_tenants(
 ) -> Result<impl warp::Reply, warp::Rejection> {
     let bc = blockchain.read().await;
     let tenants = bc.get_tenant_summaries();
-    info!("Returning {} tenant summaries", tenants.len());
     
     Ok(warp::reply::json(&serde_json::json!({
         "tenants": tenants,

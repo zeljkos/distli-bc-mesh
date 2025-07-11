@@ -1,176 +1,56 @@
 {
   "last_reported_state": {
-    "A_0": {
-      "last_reported_block_id": 3,
-      "last_update": 1752173222
+    "NET_A": {
+      "last_reported_block_id": 1,
+      "last_update": 1752226766
     },
-    "BTC": {
-      "last_reported_block_id": 3,
-      "last_update": 1752172781
-    },
-    "net_0": {
-      "last_reported_block_id": 4,
-      "last_update": 1752169109
-    },
-    "test": {
-      "last_reported_block_id": 3,
-      "last_update": 1752166801
+    "NET_B": {
+      "last_reported_block_id": 2,
+      "last_update": 1752226728
     }
   },
   "network_blockchain_state": {
-    "A_0": {
+    "NET_A": {
       "blocks": [
         {
-          "block_hash": "212354a119826cdc5b2b5988e8b657cf10893ff918bc7fe7e2f2d99b12bc2451",
+          "block_hash": "d03ad94235b2fc835acf3bac857d9ea4fa659a1a5e99991d7322be3f987f8787",
           "block_id": 1,
-          "network_id": "A_0",
+          "network_id": "NET_A",
           "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
-          "timestamp": 1752173124,
+          "timestamp": 1752226766,
           "transactions": [
-            "buy_1752173124"
-          ]
-        },
-        {
-          "block_hash": "f43cfba0e52442930db8e82f9770ef9dc8f6b9399b210ee33a85a9cff120347b",
-          "block_id": 2,
-          "network_id": "A_0",
-          "previous_hash": "212354a119826cdc5b2b5988e8b657cf10893ff918bc7fe7e2f2d99b12bc2451",
-          "timestamp": 1752173139,
-          "transactions": [
-            "sell_1752173139"
-          ]
-        },
-        {
-          "block_hash": "71edfabbb2ed44d17e7a569c6385890ec7d0a56a1c264ac0f28ef3cbfab466dc",
-          "block_id": 3,
-          "network_id": "A_0",
-          "previous_hash": "f43cfba0e52442930db8e82f9770ef9dc8f6b9399b210ee33a85a9cff120347b",
-          "timestamp": 1752173222,
-          "transactions": [
-            "msg_1752173222"
+            "sell_1752226766"
           ]
         }
       ],
-      "last_block_id": 3,
-      "last_update": 1752173222
+      "last_block_id": 1,
+      "last_update": 1752226766
     },
-    "BTC": {
+    "NET_B": {
       "blocks": [
         {
-          "block_hash": "1417ebae55cdcfb8cc86200fab6bcbf257b6412960df1cdad8288b80e3ff29bb",
+          "block_hash": "8188aa95954c5021a7deabc7b28e8f4c2c47a43e071234a6f37badcf976a429a",
           "block_id": 1,
-          "network_id": "BTC",
+          "network_id": "NET_B",
           "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
-          "timestamp": 1752172756,
+          "timestamp": 1752226709,
           "transactions": [
-            "msg_1752172756"
+            "msg_1752226709"
           ]
         },
         {
-          "block_hash": "356e3ff68a81ba2453e1d515614986923ab360e24fc4ac84324b8a4569a91d10",
+          "block_hash": "5597fb56a977e67ddc907495db5ae8d24fbd45ac369fb0ab8b64b2c3eda20ada",
           "block_id": 2,
-          "network_id": "BTC",
-          "previous_hash": "1417ebae55cdcfb8cc86200fab6bcbf257b6412960df1cdad8288b80e3ff29bb",
-          "timestamp": 1752172767,
+          "network_id": "NET_B",
+          "previous_hash": "8188aa95954c5021a7deabc7b28e8f4c2c47a43e071234a6f37badcf976a429a",
+          "timestamp": 1752226728,
           "transactions": [
-            "buy_1752172767"
-          ]
-        },
-        {
-          "block_hash": "7556ce30f86db99b318553ee8e68478b29c5592c351243f2286aa09236bf266e",
-          "block_id": 3,
-          "network_id": "BTC",
-          "previous_hash": "356e3ff68a81ba2453e1d515614986923ab360e24fc4ac84324b8a4569a91d10",
-          "timestamp": 1752172781,
-          "transactions": [
-            "sell_1752172781"
+            "buy_1752226728"
           ]
         }
       ],
-      "last_block_id": 3,
-      "last_update": 1752172781
-    },
-    "net_0": {
-      "blocks": [
-        {
-          "block_hash": "c4cc72005e3103fa00047156f64145ff3399a26461c327fa35f92ca2b33bc7df",
-          "block_id": 1,
-          "network_id": "net_0",
-          "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
-          "timestamp": 1752168486,
-          "transactions": [
-            "msg_1752168486"
-          ]
-        },
-        {
-          "block_hash": "5bd769c1342f9b6532ac81b34eed7da827d280a50408041fdd5055c94f00263e",
-          "block_id": 2,
-          "network_id": "net_0",
-          "previous_hash": "e57920f6471e24440147e5f7dc38519ce46a41855ca12ce793de5560aa2b9fcf",
-          "timestamp": 1752169020,
-          "transactions": [
-            "buy_1752169020"
-          ]
-        },
-        {
-          "block_hash": "3f1df30c5003870c06e086f0ce02e00f054c3b71058c9668a658a325ae66aa5f",
-          "block_id": 3,
-          "network_id": "net_0",
-          "previous_hash": "5bd769c1342f9b6532ac81b34eed7da827d280a50408041fdd5055c94f00263e",
-          "timestamp": 1752169033,
-          "transactions": [
-            "sell_1752169033"
-          ]
-        },
-        {
-          "block_hash": "d3f8b2e420c981cb489f8d50613ca0f82af12b277fa6720a08533d49dcddeae7",
-          "block_id": 4,
-          "network_id": "net_0",
-          "previous_hash": "3f1df30c5003870c06e086f0ce02e00f054c3b71058c9668a658a325ae66aa5f",
-          "timestamp": 1752169109,
-          "transactions": [
-            "sell_1752169109"
-          ]
-        }
-      ],
-      "last_block_id": 4,
-      "last_update": 1752169109
-    },
-    "test": {
-      "blocks": [
-        {
-          "block_hash": "84c4c00c503a74b8c8e2b4e1fbf71a49433ba3a6dd244d7d88654c80c78bb955",
-          "block_id": 1,
-          "network_id": "test",
-          "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
-          "timestamp": 1752166082,
-          "transactions": [
-            "msg_1752166082"
-          ]
-        },
-        {
-          "block_hash": "6be4427aced4c6fa34bc009666628f55ac3687c5f481b884c72452ba2da968e8",
-          "block_id": 2,
-          "network_id": "test",
-          "previous_hash": "84c4c00c503a74b8c8e2b4e1fbf71a49433ba3a6dd244d7d88654c80c78bb955",
-          "timestamp": 1752166104,
-          "transactions": [
-            "buy_1752166104"
-          ]
-        },
-        {
-          "block_hash": "6112b0dfbfd7bc132ad5b9741a44052d08830f0ea66482b3795b837fa11e412e",
-          "block_id": 3,
-          "network_id": "test",
-          "previous_hash": "77e7d71b6842db81df913fce73eed4cfd102733c2d50806517776cfe0c6065ab",
-          "timestamp": 1752166801,
-          "transactions": [
-            "sell_1752166801"
-          ]
-        }
-      ],
-      "last_block_id": 3,
-      "last_update": 1752166801
+      "last_block_id": 2,
+      "last_update": 1752226728
     }
   }
 }

@@ -1,3 +1,4 @@
+// src/tracker/server.rs
 use crate::blockchain::{Blockchain, Block, Transaction, TenantBlockchainUpdate, TenantBlockData};
 use crate::tracker::integration::EnterpriseIntegration;
 use futures_util::{SinkExt, StreamExt};
@@ -45,8 +46,8 @@ pub enum Message {
     #[serde(rename = "transaction")]
     Transaction { transaction: Transaction },
     
-    #[serde(rename = "message")]  // ADD THIS LINE
-    ChatMessage { content: String, sender: String, timestamp: u64 },  // ADD THIS LINE
+    #[serde(rename = "message")]
+    ChatMessage { content: String, sender: String, timestamp: u64 },
     
     #[serde(rename = "network_info")]
     NetworkInfo { network_id: String, peer_count: usize },
@@ -132,6 +133,17 @@ impl Tracker {
             }))
             .and_then(handle_enterprise_update);
 
+        // NEW: Cross-network trade endpoint
+        let cross_network_trade_route = warp::path("api")
+            .and(warp::path("cross-network-trade"))
+            .and(warp::post())
+            .and(warp::body::json())
+            .and(warp::any().map({
+                let networks = networks.clone();
+                move || networks.clone()
+            }))
+            .and_then(handle_cross_network_trade);
+
         let networks_for_api = self.networks.clone();
         let api_route = warp::path("api")
             .and(warp::path("networks"))
@@ -161,6 +173,7 @@ impl Tracker {
         let routes = ws_route
             .or(blockchain_sync_route)
             .or(enterprise_update_route)
+            .or(cross_network_trade_route)
             .or(api_route)
             .or(api_list_route)
             .or(health)
@@ -169,6 +182,51 @@ impl Tracker {
         
         println!("Tracker running on http://0.0.0.0:3030");
         warp::serve(routes).run(([0, 0, 0, 0], 3030)).await;
+    }
+}
+
+// NEW: Cross-network trade handler
+async fn handle_cross_network_trade(
+    trade_notification: serde_json::Value,
+    networks: Networks
+) -> Result<impl warp::Reply, warp::Rejection> {
+    println!("Received cross-network trade notification");
+    
+    let buyer_network = trade_notification["buyer_network"].as_str();
+    let seller_network = trade_notification["seller_network"].as_str();
+    
+    if let (Some(buyer_net), Some(seller_net)) = (buyer_network, seller_network) {
+        println!("Broadcasting trade execution to networks {} and {}", buyer_net, seller_net);
+        
+        // Create trade execution message
+        let trade_execution = Message::EnterpriseSync {
+            network_id: "cross_network".to_string(),
+            sync_data: serde_json::json!({
+                "type": "trade_execution",
+                "trade": trade_notification
+            })
+        };
+        
+        // Broadcast to both networks
+        broadcast_to_network(&networks, buyer_net, "enterprise", trade_execution.clone()).await;
+        if buyer_net != seller_net {
+            broadcast_to_network(&networks, seller_net, "enterprise", trade_execution).await;
+        }
+        
+        println!("Trade execution broadcast to both networks");
+        
+        Ok(warp::reply::json(&serde_json::json!({
+            "status": "success",
+            "message": "Cross-network trade broadcast to both networks",
+            "buyer_network": buyer_net,
+            "seller_network": seller_net
+        })))
+    } else {
+        println!("Invalid cross-network trade notification - missing network IDs");
+        Ok(warp::reply::json(&serde_json::json!({
+            "status": "error",
+            "message": "Invalid trade notification format"
+        })))
     }
 }
 
@@ -192,14 +250,14 @@ async fn handle_enterprise_update(
         
         broadcast_to_network(&networks, network_id, "enterprise", message).await;
         
-        println!("✅ Enterprise update broadcast to {} network peers", network_id);
+        println!("Enterprise update broadcast to {} network peers", network_id);
         
         Ok(warp::reply::json(&serde_json::json!({
             "status": "success",
             "message": "Enterprise update broadcast to network peers"
         })))
     } else {
-        println!("❌ Invalid enterprise update - missing network_id");
+        println!("Invalid enterprise update - missing network_id");
         Ok(warp::reply::json(&serde_json::json!({
             "status": "error",
             "message": "Invalid enterprise update format"
@@ -231,12 +289,9 @@ async fn handle_blockchain_sync(
     })))
 }
 
-// FIXED: Convert P2P blocks to enterprise format and send to validator
-// In src/tracker/server.rs, replace the send_block_to_enterprise function:
-
 async fn send_block_to_enterprise(block: &Block, network_id: &str, peer_id: &str) {
     if let Some(enterprise_url) = std::env::var("ENTERPRISE_BC_URL").ok() {
-        println!(" Converting P2P block to enterprise format for network: {}", network_id);
+        println!("Converting P2P block to enterprise format for network: {}", network_id);
         
         // Convert Block to TenantBlockData with FULL transaction data
         let tenant_block = TenantBlockData {
@@ -269,20 +324,21 @@ async fn send_block_to_enterprise(block: &Block, network_id: &str, peer_id: &str
         match client.post(&url).json(&update).send().await {
             Ok(response) => {
                 if response.status().is_success() {
-                    println!(" Successfully sent block #{} from network {} to enterprise validator", 
+                    println!("Successfully sent block #{} from network {} to enterprise validator", 
                             block.height, network_id);
                 } else {
-                    println!(" Failed to send to enterprise validator: HTTP {}", response.status());
+                    println!("Failed to send to enterprise validator: HTTP {}", response.status());
                 }
             }
             Err(e) => {
-                println!(" Error sending to enterprise validator: {}", e);
+                println!("Error sending to enterprise validator: {}", e);
             }
         }
     } else {
-        println!("⚠️No ENTERPRISE_BC_URL configured - skipping enterprise sync");
+        println!("No ENTERPRISE_BC_URL configured - skipping enterprise sync");
     }
 }
+
 async fn handle_peer(
     ws: WebSocket, 
     networks: Networks, 
@@ -356,7 +412,7 @@ async fn handle_peer(
                             println!("Peer {} joined network: {}", &peer_id[..8], network_id);
                         }
                         Message::Block { block } => {
-                            println!(" Received Block message for block #{}", block.height);
+                            println!("Received Block message for block #{}", block.height);
                             if let Some(network_id) = &current_network {
                                 println!("Received block #{} from peer {} in network {}", 
                                         block.height, &peer_id[..8], network_id);
@@ -364,7 +420,7 @@ async fn handle_peer(
                                 // Broadcast to other peers in the network
                                 broadcast_to_network(&networks, network_id, &peer_id, message.clone()).await;
                                 
-                                // FIXED: Send to enterprise validator
+                                // Send to enterprise validator
                                 send_block_to_enterprise(&block, network_id, &peer_id).await;
                                 
                                 // Also update enterprise integration if available
@@ -375,7 +431,7 @@ async fn handle_peer(
                                         transactions: block.transactions.iter().map(|tx| tx.id.clone()).collect(),
                                         timestamp: block.timestamp,
                                         previous_hash: block.previous_hash.clone(),
-                                        network_id: network_id.clone(),  // ADD THIS LINE
+                                        network_id: network_id.clone(),
                                     };
                                     
                                     let update = TenantBlockchainUpdate {
@@ -434,13 +490,13 @@ async fn handle_peer(
                                     }
                                 });
                             } else {
-                                println!(" No enterprise blockchain URL configured");
+                                println!("No enterprise blockchain URL configured");
                             }
                         }
                         Message::ChatMessage { content, sender, timestamp } => {
                             if let Some(network_id) = &current_network {
                                 broadcast_to_network(&networks, network_id, &peer_id, message.clone()).await;
-                                println!("📨 Chat message '{}' from {} broadcast to network {}", content, sender, network_id);
+                                println!("Chat message '{}' from {} broadcast to network {}", content, sender, network_id);
                             }
                         }
                         Message::Transaction { transaction } => {
@@ -456,7 +512,7 @@ async fn handle_peer(
                         }
                     }
                 } else {
-                    println!(" Failed to parse WebSocket message: {}", text);
+                    println!("Failed to parse WebSocket message: {}", text);
                 }
             }
         } else {
