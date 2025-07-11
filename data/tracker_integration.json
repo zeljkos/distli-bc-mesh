@@ -1,56 +1,56 @@
 {
   "last_reported_state": {
     "NET_A": {
-      "last_reported_block_id": 1,
-      "last_update": 1752226766
+      "last_reported_block_id": 2,
+      "last_update": 1752260809
     },
     "NET_B": {
-      "last_reported_block_id": 2,
-      "last_update": 1752226728
+      "last_reported_block_id": 1,
+      "last_update": 1752259898
     }
   },
   "network_blockchain_state": {
     "NET_A": {
       "blocks": [
         {
-          "block_hash": "d03ad94235b2fc835acf3bac857d9ea4fa659a1a5e99991d7322be3f987f8787",
+          "block_hash": "4757bde0bd6fa73be5bcf8034021313e2d5d8a968907a6c7457c22113b2fa38f",
           "block_id": 1,
           "network_id": "NET_A",
           "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
-          "timestamp": 1752226766,
+          "timestamp": 1752259878,
           "transactions": [
-            "sell_1752226766"
-          ]
-        }
-      ],
-      "last_block_id": 1,
-      "last_update": 1752226766
-    },
-    "NET_B": {
-      "blocks": [
-        {
-          "block_hash": "8188aa95954c5021a7deabc7b28e8f4c2c47a43e071234a6f37badcf976a429a",
-          "block_id": 1,
-          "network_id": "NET_B",
-          "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
-          "timestamp": 1752226709,
-          "transactions": [
-            "msg_1752226709"
+            "buy_1752259878"
           ]
         },
         {
-          "block_hash": "5597fb56a977e67ddc907495db5ae8d24fbd45ac369fb0ab8b64b2c3eda20ada",
+          "block_hash": "ecbc0bbebd6132169b2b3d285c1f77eaf06acb4e3d8444c866af26436192d1b6",
           "block_id": 2,
-          "network_id": "NET_B",
-          "previous_hash": "8188aa95954c5021a7deabc7b28e8f4c2c47a43e071234a6f37badcf976a429a",
-          "timestamp": 1752226728,
+          "network_id": "NET_A",
+          "previous_hash": "5cef35d7728d57e744806dd57758d63ac5c294722def461fee8127c4333bab8b",
+          "timestamp": 1752260809,
           "transactions": [
-            "buy_1752226728"
+            "sell_1752260809"
           ]
         }
       ],
       "last_block_id": 2,
-      "last_update": 1752226728
+      "last_update": 1752261085
+    },
+    "NET_B": {
+      "blocks": [
+        {
+          "block_hash": "2d439c6e5a0082ba8203dd2b6baf032f10a35ccf571606b96ad039f14f594fb0",
+          "block_id": 1,
+          "network_id": "NET_B",
+          "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+          "timestamp": 1752259898,
+          "transactions": [
+            "sell_1752259898"
+          ]
+        }
+      ],
+      "last_block_id": 1,
+      "last_update": 1752261101
     }
   }
 }

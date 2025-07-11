@@ -1,6 +1,6 @@
 // src/enterprise_bc/api.rs - SIMPLIFIED WORKING VERSION
 use crate::blockchain::{Blockchain, TenantBlockchainUpdate};
-use crate::enterprise_bc::order_engine::EnterpriseOrderEngine;
+use crate::enterprise_bc::order_engine::{EnterpriseOrderEngine, Trade};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use warp::Filter;
@@ -97,6 +97,8 @@ struct BlocksQuery {
     limit: Option<usize>,
 }
 
+// Updated handle_tenant_blockchain_update in src/enterprise_bc/api.rs
+// Updated handle_tenant_blockchain_update in src/enterprise_bc/api.rs
 async fn handle_tenant_blockchain_update(
     update: TenantBlockchainUpdate,
     blockchain: Arc<RwLock<Blockchain>>,
@@ -104,79 +106,108 @@ async fn handle_tenant_blockchain_update(
     tracker_url: Option<String>
 ) -> Result<impl warp::Reply, warp::Rejection> {
     println!("=== ENTERPRISE BC: Processing tenant update from network: {} ===", update.network_id);
-    println!("Blocks to process: {}", update.new_blocks.len());
     
-    let blocks_count = update.new_blocks.len();
-    let mut transactions_count = 0;
-    let mut orders_processed = 0;
-    
-    // Store blocks in blockchain first
+    // Store blocks and process orders (existing code)
+    let mut all_trades = Vec::new();
     {
         let mut bc = blockchain.write().await;
         bc.add_tenant_blocks(&update);
-        println!("Stored blocks in enterprise blockchain");
-    }
-    
-    // Process each block for order matching
-    let mut all_trades = Vec::new();
-    {
-        let mut engine = order_engine.write().await;
         
+        let mut engine = order_engine.write().await;
         for block in &update.new_blocks {
-            transactions_count += block.transactions.len();
-            println!("Processing block {} with {} transactions", block.block_id, block.transactions.len());
-            
-            // Count and process trading transactions
-            for tx_string in &block.transactions {
-                if let Ok(tx) = serde_json::from_str::<crate::blockchain::Transaction>(tx_string) {
-                    if matches!(tx.tx_type, crate::blockchain::TransactionType::Trading { .. }) {
-                        orders_processed += 1;
-                        println!("Found trading transaction: {}", tx.id);
-                    }
-                }
-            }
-            
             let block_trades = engine.process_block(block);
-            if !block_trades.is_empty() {
-                println!("Block generated {} trades", block_trades.len());
-                all_trades.extend(block_trades);
-            }
+            all_trades.extend(block_trades);
         }
     }
     
-    // Send trade notifications back to networks
+    // NEW: Create and send execution blocks back to edge networks
     if !all_trades.is_empty() {
-        println!("Broadcasting {} cross-network trades", all_trades.len());
+        println!("Broadcasting {} cross-network trades back to edge", all_trades.len());
         
         if let Some(ref tracker_url) = tracker_url {
             for trade in &all_trades {
-                println!("Sending trade notification: {} {} {} @ {} between {} and {}", 
-                         trade.trade_id, trade.quantity, trade.asset, trade.price,
-                         trade.buyer_network, trade.seller_network);
-                         
-                send_trade_to_tracker(trade, tracker_url).await;
+                // Send to both buyer and seller networks
+                send_execution_block_to_network(trade, &trade.buyer_network, tracker_url).await;
+                if trade.buyer_network != trade.seller_network {
+                    send_execution_block_to_network(trade, &trade.seller_network, tracker_url).await;
+                }
             }
-        } else {
-            println!("No tracker URL configured - trades not broadcast");
         }
-    } else {
-        println!("No trades generated from this update");
     }
-    
-    println!("=== PROCESSING COMPLETE: {} blocks, {} transactions, {} orders, {} trades ===", 
-          blocks_count, transactions_count, orders_processed, all_trades.len());
     
     Ok(warp::reply::json(&serde_json::json!({
         "status": "success",
-        "message": "Tenant blocks processed with order matching",
-        "network_id": update.network_id,
-        "blocks_processed": blocks_count,
-        "transactions_processed": transactions_count,
-        "orders_processed": orders_processed,
-        "trades_executed": all_trades.len(),
-        "trades": all_trades
+        "trades_executed": all_trades.len()
     })))
 }
+
+// NEW: Send execution block to specific network
+async fn send_execution_block_to_network(trade: &Trade, network_id: &str, tracker_url: &str) {
+    // Create execution transaction in enterprise format
+    let execution_tx = serde_json::json!({
+        "id": format!("exec_{}", trade.trade_id),
+        "from": trade.buyer,
+        "to": trade.seller,
+        "amount": trade.quantity * trade.price / 100,
+        "tx_type": {
+            "TradeExecution": {
+                "asset": trade.asset,
+                "quantity": trade.quantity,
+                "price": trade.price,
+                "buyer": trade.buyer,
+                "seller": trade.seller,
+                "trade_id": trade.trade_id
+            }
+        },
+        "timestamp": trade.timestamp
+    });
+    
+    // Create execution block
+    let execution_block = serde_json::json!({
+        "height": 999999, // Special height for enterprise execution blocks
+        "hash": format!("exec_{}", trade.trade_id),
+        "previous_hash": "enterprise",
+        "timestamp": trade.timestamp,
+        "validator": "enterprise_bc",
+        "transactions": [execution_tx],
+        "stake_weight": 1000
+    });
+    
+    // Send to tracker for forwarding to network
+    let notification = serde_json::json!({
+        "type": "enterprise_execution_block",
+        "network_id": network_id,
+        "execution_block": execution_block,
+        "trade": {
+            "trade_id": trade.trade_id,
+            "asset": trade.asset,
+            "quantity": trade.quantity,
+            "price": trade.price,
+            "buyer": trade.buyer,
+            "seller": trade.seller,
+            "buyer_network": trade.buyer_network,
+            "seller_network": trade.seller_network,
+            "timestamp": trade.timestamp
+        }
+    });
+    
+    let client = reqwest::Client::new();
+    let url = format!("{}/api/enterprise-execution", tracker_url);
+    
+    match client.post(&url).json(&notification).send().await {
+        Ok(response) => {
+            if response.status().is_success() {
+                println!("Sent execution block for trade {} to network {}", trade.trade_id, network_id);
+            } else {
+                println!("Failed to send execution block: HTTP {}", response.status());
+            }
+        }
+        Err(e) => {
+            println!("Failed to send execution block: {}", e);
+        }
+    }
+}
+////////
 
 async fn send_trade_to_tracker(trade: &crate::enterprise_bc::order_engine::Trade, tracker_url: &str) {
     let trade_notification = serde_json::json!({

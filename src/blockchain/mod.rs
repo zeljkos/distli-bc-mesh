@@ -39,6 +39,15 @@ pub enum TransactionType {
     Message { content: String },
     ContractDeploy { contract_name: String },
     ContractCall { function: String, params: String },
+    // NEW: Add TradeExecution for cross-network trade records
+    TradeExecution {
+        asset: String,
+        quantity: u64,
+        price: u64,
+        buyer: String,
+        seller: String,
+        trade_id: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

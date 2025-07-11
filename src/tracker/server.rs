@@ -122,6 +122,17 @@ impl Tracker {
             }))
             .and_then(handle_blockchain_sync);
 
+           //  NEW: Enterprise execution block endpoint
+        let enterprise_execution_route = warp::path("api")
+            .and(warp::path("enterprise-execution"))
+            .and(warp::post())
+            .and(warp::body::json())
+            .and(warp::any().map({
+                let networks = networks.clone();
+                move || networks.clone()
+            }))
+            .and_then(handle_enterprise_execution);
+
         let enterprise_update_route = warp::path("api")
             .and(warp::path("enterprise-update"))
             .and(warp::post())
@@ -174,6 +185,7 @@ impl Tracker {
             .or(blockchain_sync_route)
             .or(enterprise_update_route)
             .or(cross_network_trade_route)
+            .or(enterprise_execution_route)  // ADD THIS LINE
             .or(api_route)
             .or(api_list_route)
             .or(health)
@@ -184,6 +196,46 @@ impl Tracker {
         warp::serve(routes).run(([0, 0, 0, 0], 3030)).await;
     }
 }
+
+
+// NEW: Handle enterprise execution blocks
+async fn handle_enterprise_execution(
+    execution_data: serde_json::Value,
+    networks: Networks
+) -> Result<impl warp::Reply, warp::Rejection> {
+    println!("Received execution block from enterprise BC");
+    
+    if let Some(network_id) = execution_data["network_id"].as_str() {
+        println!("Forwarding execution block to network: {}", network_id);
+        
+        // Create message for edge clients
+        let execution_message = Message::EnterpriseSync {
+            network_id: network_id.to_string(),
+            sync_data: serde_json::json!({
+                "type": "execution_block",
+                "execution_block": execution_data["execution_block"],
+                "trade": execution_data["trade"]
+            })
+        };
+        
+        // Broadcast to all peers in the network
+        broadcast_to_network(&networks, network_id, "enterprise", execution_message).await;
+        
+        println!("Execution block forwarded to network {}", network_id);
+        
+        Ok(warp::reply::json(&serde_json::json!({
+            "status": "success",
+            "message": "Execution block forwarded to network"
+        })))
+    } else {
+        println!("Invalid execution block - missing network_id");
+        Ok(warp::reply::json(&serde_json::json!({
+            "status": "error",
+            "message": "Invalid execution block format"
+        })))
+    }
+}
+
 
 // NEW: Cross-network trade handler
 async fn handle_cross_network_trade(
