@@ -837,55 +837,69 @@ placeSellOrder() {
 	}
 
 	updateTable(tableId, localOrders, type) {
-			const tbody = document.getElementById(tableId);
-			if (!tbody) return;
-			
-			// Use enterprise orders as the source of truth (includes updated quantities after trades)
-			const enterpriseOrders = type === 'bid' ? 
-				(this.remoteOrders?.bids || []) : 
-				(this.remoteOrders?.asks || []);
-			
-			// Show all orders from enterprise (both local network and cross-network)
-			const allOrders = enterpriseOrders.map(order => ({
-				...order,
-				isLocal: order.network_id === this.currentNetwork
-			}));
-			
-			console.log(`${type} orders from enterprise:`, allOrders);
-			
-			if (allOrders.length === 0) {
-				tbody.innerHTML = `<tr><td colspan="4">No ${type} orders</td></tr>`;
-				return;
-			}
-			
-			// Sort by price
-			allOrders.sort((a, b) => {
-				const priceA = a.price || 0;
-				const priceB = b.price || 0;
-				return type === 'bid' ? priceB - priceA : priceA - priceB;
-			});
-			
-			// Display orders with clear network labels
-			tbody.innerHTML = allOrders.map(order => {
-				const network = order.network_id || 'unknown';
-				const isLocal = order.isLocal;
-				const traderDisplay = (order.trader || 'unknown').substring(0, 8);
-				
-				// Style remote orders differently
-				const rowStyle = isLocal ? '' : 'background-color: #f0f0f0; font-style: italic;';
-				const networkLabel = isLocal ? '(local)' : `(${network})`;
-				
-				return `
-					<tr style="${rowStyle}">
-						<td>$${((order.price || 0) / 100).toFixed(2)}</td>
-						<td>${((order.quantity || 0) / 100).toFixed(2)}</td>
-						<td>${order.asset || 'N/A'}</td>
-						<td>${traderDisplay}... ${networkLabel}</td>
-					</tr>
-				`;
-			}).join('');
-		}
-
+	    const tbody = document.getElementById(tableId);
+	    if (!tbody) return;
+	    
+	    let allOrders = [];
+	    
+	    // When connected: Use enterprise as source of truth
+	    if (this.connected && this.remoteOrders) {
+		const enterpriseOrders = type === 'bid' ? 
+		    (this.remoteOrders?.bids || []) : 
+		    (this.remoteOrders?.asks || []);
+		
+		allOrders = enterpriseOrders.map(order => ({
+		    ...order,
+		    isLocal: order.network_id === this.currentNetwork
+		}));
+		
+		console.log(`Online mode - ${type} orders from enterprise:`, allOrders);
+	    } 
+	    // When offline: Use local order book
+	    else {
+		allOrders = localOrders.map(order => ({
+		    ...order,
+		    network_id: this.currentNetwork,
+		    isLocal: true
+		}));
+		
+		console.log(`Offline mode - ${type} orders from local:`, allOrders);
+	    }
+	    
+	    if (allOrders.length === 0) {
+		tbody.innerHTML = `<tr><td colspan="4">No ${type} orders</td></tr>`;
+		return;
+	    }
+	    
+	    // Sort by price
+	    allOrders.sort((a, b) => {
+		const priceA = a.price || 0;
+		const priceB = b.price || 0;
+		return type === 'bid' ? priceB - priceA : priceA - priceB;
+	    });
+	    
+	    // Display orders with connection status
+	    tbody.innerHTML = allOrders.map(order => {
+		const network = order.network_id || this.currentNetwork || 'local';
+		const isLocal = order.isLocal;
+		const traderDisplay = (order.trader || 'unknown').substring(0, 8);
+		
+		// Style remote orders differently
+		const rowStyle = isLocal ? '' : 'background-color: #f0f0f0; font-style: italic;';
+		const networkLabel = this.connected ? 
+		    (isLocal ? '(local)' : `(${network})`) : 
+		    '(offline)';
+		
+		return `
+		    <tr style="${rowStyle}">
+			<td>$${((order.price || 0) / 100).toFixed(2)}</td>
+			<td>${((order.quantity || 0) / 100).toFixed(2)}</td>
+			<td>${order.asset || 'N/A'}</td>
+			<td>${traderDisplay}... ${networkLabel}</td>
+		    </tr>
+		`;
+	    }).join('');
+	}
     updateTradesTable(trades) {
         const tbody = document.getElementById('trades-tbody');
         if (!tbody) return;
