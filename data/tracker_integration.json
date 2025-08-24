@@ -1,56 +1,56 @@
 {
   "last_reported_state": {
-    "NET_A": {
+    "nyc": {
       "last_reported_block_id": 1,
-      "last_update": 1752226766
+      "last_update": 1756061564
     },
-    "NET_B": {
+    "zrh": {
       "last_reported_block_id": 2,
-      "last_update": 1752226728
+      "last_update": 1756061532
     }
   },
   "network_blockchain_state": {
-    "NET_A": {
+    "nyc": {
       "blocks": [
         {
-          "block_hash": "d03ad94235b2fc835acf3bac857d9ea4fa659a1a5e99991d7322be3f987f8787",
+          "block_hash": "cf2ecca15aadc33e14cbd1fa5191c99537c0d9af2e22ff23baa3648272c5e9e1",
           "block_id": 1,
-          "network_id": "NET_A",
+          "network_id": "nyc",
           "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
-          "timestamp": 1752226766,
+          "timestamp": 1756061563,
           "transactions": [
-            "sell_1752226766"
+            "buy_1756061563"
           ]
         }
       ],
       "last_block_id": 1,
-      "last_update": 1752226766
+      "last_update": 1756061564
     },
-    "NET_B": {
+    "zrh": {
       "blocks": [
         {
-          "block_hash": "8188aa95954c5021a7deabc7b28e8f4c2c47a43e071234a6f37badcf976a429a",
+          "block_hash": "a83ac281bf6692158c38eafc87dd3b22ce6706cfcf1cf0c51b734411bea9b974",
           "block_id": 1,
-          "network_id": "NET_B",
+          "network_id": "zrh",
           "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
-          "timestamp": 1752226709,
+          "timestamp": 1756061516,
           "transactions": [
-            "msg_1752226709"
+            "sell_1756061516"
           ]
         },
         {
-          "block_hash": "5597fb56a977e67ddc907495db5ae8d24fbd45ac369fb0ab8b64b2c3eda20ada",
+          "block_hash": "21fee79236173e9d7dc6b7f808759196edd6d2e872158f486f17f6649e159062",
           "block_id": 2,
-          "network_id": "NET_B",
-          "previous_hash": "8188aa95954c5021a7deabc7b28e8f4c2c47a43e071234a6f37badcf976a429a",
-          "timestamp": 1752226728,
+          "network_id": "zrh",
+          "previous_hash": "a83ac281bf6692158c38eafc87dd3b22ce6706cfcf1cf0c51b734411bea9b974",
+          "timestamp": 1756061532,
           "transactions": [
-            "buy_1752226728"
+            "buy_1756061532"
           ]
         }
       ],
       "last_block_id": 2,
-      "last_update": 1752226728
+      "last_update": 1756061532
     }
   }
 }

@@ -169,61 +169,21 @@ impl Tracker {
             })));
             
         let static_files = warp::fs::dir("public");
-
-        let order_book_broadcast_route = warp::path("api")
-            .and(warp::path("order-book-broadcast"))
-            .and(warp::post())
-            .and(warp::body::json())
-            .and(warp::any().map({
-                let networks = networks.clone();
-                move || networks.clone()
-            }))
-            .and_then(handle_order_book_broadcast);
         
         let routes = ws_route
             .or(blockchain_sync_route)
             .or(enterprise_update_route)
             .or(cross_network_trade_route)
-            .or(order_book_broadcast_route)
             .or(api_route)
             .or(api_list_route)
             .or(health)
             .or(static_files)
             .with(warp::cors().allow_any_origin());
-
+        
         println!("Tracker running on http://0.0.0.0:3030");
         warp::serve(routes).run(([0, 0, 0, 0], 3030)).await;
     }
 }
-
-async fn handle_order_book_broadcast(
-    order_update: serde_json::Value,
-    networks: Networks
-) -> Result<impl warp::Reply, warp::Rejection> {
-    let message = Message::EnterpriseSync {
-        network_id: "global".to_string(),
-        sync_data: serde_json::json!({
-            "type": "order_book_update",
-            "orders": order_update["orders"]
-        })
-    };
-    
-    // Broadcast to all networks
-    let networks_lock = networks.read().await;
-    for (network_id, network_peers) in networks_lock.iter() {
-        for (_, peer) in network_peers.iter() {
-            let json = serde_json::to_string(&message).unwrap_or_default();
-            let _ = peer.sender.send(Ok(WsMessage::text(json)));
-        }
-    }
-    
-    Ok(warp::reply::json(&serde_json::json!({
-        "status": "success",
-        "message": "Order book broadcast to all networks"
-    })))
-}
-
-
 
 // NEW: Cross-network trade handler
 async fn handle_cross_network_trade(
@@ -345,9 +305,6 @@ async fn send_block_to_enterprise(block: &Block, network_id: &str, peer_id: &str
             previous_hash: block.previous_hash.clone(),
             network_id: network_id.to_string(),
         };
-
-        println!("TenantBlockData network_id: {}", tenant_block.network_id);  // Add verification
-
         
         // Create TenantBlockchainUpdate
         let update = TenantBlockchainUpdate {

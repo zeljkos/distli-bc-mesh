@@ -266,39 +266,11 @@ impl EnterpriseOrderEngine {
         };
         &self.recent_trades[start..]
     }
-
+    
     pub fn get_all_orders(&self) -> serde_json::Value {
-        // Map orders to include all fields explicitly
-        let buy_orders_with_network: Vec<serde_json::Value> = self.buy_orders.iter().map(|o| {
-            serde_json::json!({
-                "order_id": o.order_id,
-                "trader": o.trader,
-                "network_id": o.network_id,  // Explicitly include
-                "asset": o.asset,
-                "quantity": o.quantity,
-                "price": o.price,
-                "side": "buy",
-                "timestamp": o.timestamp
-            })
-        }).collect();
-
-        let sell_orders_with_network: Vec<serde_json::Value> = self.sell_orders.iter().map(|o| {
-            serde_json::json!({
-                "order_id": o.order_id,
-                "trader": o.trader,
-                "network_id": o.network_id,  // Explicitly include
-                "asset": o.asset,
-                "quantity": o.quantity,
-                "price": o.price,
-                "side": "sell",
-                "timestamp": o.timestamp
-            })
-        }).collect();
-
         serde_json::json!({
-            "buy_orders": buy_orders_with_network,
-            "sell_orders": sell_orders_with_network
+            "buy_orders": self.buy_orders,
+            "sell_orders": self.sell_orders
         })
     }
-    
 }

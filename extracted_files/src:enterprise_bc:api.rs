@@ -105,27 +105,27 @@ async fn handle_tenant_blockchain_update(
 ) -> Result<impl warp::Reply, warp::Rejection> {
     println!("=== ENTERPRISE BC: Processing tenant update from network: {} ===", update.network_id);
     println!("Blocks to process: {}", update.new_blocks.len());
-
+    
     let blocks_count = update.new_blocks.len();
     let mut transactions_count = 0;
     let mut orders_processed = 0;
-
+    
     // Store blocks in blockchain first
     {
         let mut bc = blockchain.write().await;
         bc.add_tenant_blocks(&update);
         println!("Stored blocks in enterprise blockchain");
     }
-
+    
     // Process each block for order matching
     let mut all_trades = Vec::new();
     {
         let mut engine = order_engine.write().await;
-
+        
         for block in &update.new_blocks {
             transactions_count += block.transactions.len();
             println!("Processing block {} with {} transactions", block.block_id, block.transactions.len());
-
+            
             // Count and process trading transactions
             for tx_string in &block.transactions {
                 if let Ok(tx) = serde_json::from_str::<crate::blockchain::Transaction>(tx_string) {
@@ -135,7 +135,7 @@ async fn handle_tenant_blockchain_update(
                     }
                 }
             }
-
+            
             let block_trades = engine.process_block(block);
             if !block_trades.is_empty() {
                 println!("Block generated {} trades", block_trades.len());
@@ -143,17 +143,17 @@ async fn handle_tenant_blockchain_update(
             }
         }
     }
-
+    
     // Send trade notifications back to networks
     if !all_trades.is_empty() {
         println!("Broadcasting {} cross-network trades", all_trades.len());
-
+        
         if let Some(ref tracker_url) = tracker_url {
             for trade in &all_trades {
-                println!("Sending trade notification: {} {} {} @ {} between {} and {}",
+                println!("Sending trade notification: {} {} {} @ {} between {} and {}", 
                          trade.trade_id, trade.quantity, trade.asset, trade.price,
                          trade.buyer_network, trade.seller_network);
-
+                         
                 send_trade_to_tracker(trade, tracker_url).await;
             }
         } else {
@@ -162,74 +162,10 @@ async fn handle_tenant_blockchain_update(
     } else {
         println!("No trades generated from this update");
     }
-
-    println!("=== PROCESSING COMPLETE: {} blocks, {} transactions, {} orders, {} trades ===",
+    
+    println!("=== PROCESSING COMPLETE: {} blocks, {} transactions, {} orders, {} trades ===", 
           blocks_count, transactions_count, orders_processed, all_trades.len());
-
-    // Small delay if trades were executed to ensure they're fully processed
-    if !all_trades.is_empty() {
-        tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
-    }
-
-    // ALWAYS broadcast order book state after processing (whether trades happened or not)
-    if orders_processed > 0 || !all_trades.is_empty() {
-        let engine = order_engine.read().await;
-        let all_orders = engine.get_all_orders();
-
-        // Log the current order book state
-        println!("Current order book state:");
-        if let Some(buy_orders) = all_orders.get("buy_orders") {
-            if let Some(buys) = buy_orders.as_array() {
-                println!("  Buy orders: {} total", buys.len());
-                for order in buys {
-                    println!("    - {} {} @ {} from {}",
-                        order["quantity"], order["asset"], order["price"], order["network_id"]);
-                }
-            }
-        }
-        if let Some(sell_orders) = all_orders.get("sell_orders") {
-            if let Some(sells) = sell_orders.as_array() {
-                println!("  Sell orders: {} total", sells.len());
-                for order in sells {
-                    println!("    - {} {} @ {} from {}",
-                        order["quantity"], order["asset"], order["price"], order["network_id"]);
-                }
-            }
-        }
-
-        if let Some(ref tracker_url) = tracker_url {
-            println!("Broadcasting updated order book to tracker");
-
-            let order_book_update = serde_json::json!({
-                "type": "order_book_broadcast",
-                "orders": all_orders,
-                "timestamp": std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_secs()
-            });
-
-            let client = reqwest::Client::new();
-            let url = format!("{}/api/order-book-broadcast", tracker_url);
-
-            match client.post(&url).json(&order_book_update).send().await {
-                Ok(response) => {
-                    if response.status().is_success() {
-                        let body = response.text().await.unwrap_or_else(|_| "".to_string());
-                        println!("Order book broadcast successful: {}", body);
-                    } else {
-                        let status = response.status();
-                        let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
-                        println!("Order book broadcast failed: {} - {}", status, error_text);
-                    }
-                }
-                Err(e) => {
-                    println!("Failed to broadcast order book: {}", e);
-                }
-            }
-        }
-    }
-
+    
     Ok(warp::reply::json(&serde_json::json!({
         "status": "success",
         "message": "Tenant blocks processed with order matching",

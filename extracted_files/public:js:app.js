@@ -13,7 +13,7 @@ class DistliApp {
         this.availablePeers = [];
         this.userId = 'user_' + Math.random().toString(36).substr(2, 9);
         this.recentBlocks = [];
-		this.remoteOrders = { bids: [], asks: [] };
+        
         this.rtcConfig = {
             iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
         };
@@ -176,16 +176,11 @@ class DistliApp {
                 }
                 break;
             case 'enterprise_sync':
-				console.log('Received enterprise sync message:', message);
-				if (message.sync_data) {
-					if (message.sync_data.type === 'order_book_update') {
-						console.log('Processing order book update');
-					   	this.handleRemoteOrderBook(message.sync_data.orders);
-					} else if ( message.sync_data.type === 'trade_execution') {
-						console.log('Processing trade execution from enterprise BC');
-						this.handleTradeExecution(message.sync_data.trade);
-					}
-				}
+                console.log('Received enterprise sync message:', message);
+                if (message.sync_data && message.sync_data.type === 'trade_execution') {
+                    console.log('Processing trade execution from enterprise BC');
+                    this.handleTradeExecution(message.sync_data.trade);
+                }
                 break;
         }
     }
@@ -209,36 +204,6 @@ class DistliApp {
         const inputValue = document.getElementById('network-input')?.value?.trim();
         return selectValue || inputValue;
     }
-	
-	handleRemoteOrderBook(orders) {
-			console.log('Received remote order book update:', orders);
-			console.log('Current network:', this.currentNetwork);
-			
-			if (orders && orders.buy_orders && orders.sell_orders) {
-				// Store ALL orders from enterprise (we'll filter on display)
-				this.remoteOrders = {
-					bids: orders.buy_orders || [],
-					asks: orders.sell_orders || []
-				};
-				
-				console.log('All orders from enterprise:', {
-					bids: this.remoteOrders.bids.length,
-					asks: this.remoteOrders.asks.length
-				});
-				
-				// Log network IDs for debugging
-				this.remoteOrders.bids.forEach(bid => {
-					console.log(`Bid: ${bid.quantity} @ ${bid.price} from network: ${bid.network_id}`);
-				});
-				this.remoteOrders.asks.forEach(ask => {
-					console.log(`Ask: ${ask.quantity} @ ${ask.price} from network: ${ask.network_id}`);
-				});
-				
-				// Force update the order book display
-				this.updateOrderBook();
-			}
-	}
-
 
     async refreshNetworks() {
         if (!this.connected) return;
@@ -473,34 +438,6 @@ class DistliApp {
         this.showTradeNotification(trade);
     }
 
-	// Add this new method after handleTradeExecution
-	updateLocalOrderBookAfterTrade(trade) {
-		// Get current order book
-		const orderBookData = JSON.parse(this.orderBook.get_order_book_json());
-			
-		// Check if we need to update our local orders
-		if (trade.buyer_network === this.currentNetwork || trade.seller_network === this.currentNetwork) {
-			console.log('Updating local order book after trade execution');
-			
-			// If we're the buyer, remove/reduce from our buy orders
-			if (trade.buyer_network === this.currentNetwork) {
-				// Remove the executed quantity from local buy orders
-				// Note: This is handled by the WASM orderbook when we add the trade
-			}
-				
-			// If we're the seller, remove/reduce from our sell orders  
-			if (trade.seller_network === this.currentNetwork) {
-				// Remove the executed quantity from local sell orders
-				// Note: This is handled by the WASM orderbook when we add the trade
-			}
-				
-			// Force a full refresh of the order book
-			this.updateOrderBook();
-		}
-	}
-
-
-
     // NEW: Show trade notification
     showTradeNotification(trade) {
         const quantity = (trade.quantity / 100).toFixed(2);
@@ -643,166 +580,163 @@ class DistliApp {
         }
     }
 
-	placeBuyOrder() {
-    const asset = document.getElementById('buy-asset')?.value;
-    const quantity = parseFloat(document.getElementById('buy-quantity')?.value) || 0;
-    const price = parseFloat(document.getElementById('buy-price')?.value) || 0;
+    placeBuyOrder() {
+        const asset = document.getElementById('buy-asset')?.value;
+        const quantity = parseFloat(document.getElementById('buy-quantity')?.value) || 0;
+        const price = parseFloat(document.getElementById('buy-price')?.value) || 0;
 
-    if (!asset || quantity <= 0 || price <= 0) return;
+        if (!asset || quantity <= 0 || price <= 0) return;
 
-    try {
-        const quantityInt = Math.floor(quantity * 100);
-        const priceInt = Math.floor(price * 100);
+        try {
+            const quantityInt = Math.floor(quantity * 100);
+            const priceInt = Math.floor(price * 100);
 
-        // Step 1: Create BUY order block
-        this.blockchain.call_contract_buy(asset, quantityInt, priceInt, this.userId);
-        const orderSuccess = this.blockchain.mine_block();
+            // Step 1: Create BUY order block
+            this.blockchain.call_contract_buy(asset, quantityInt, priceInt, this.userId);
+            const orderSuccess = this.blockchain.mine_block();
 
-        if (orderSuccess) {
-            const orderBlock = JSON.parse(this.blockchain.get_latest_block_json());
-            this.storeBlock(orderBlock);
-            this.broadcastToP2P({ type: 'blockchain_block', block: orderBlock, sender: this.userId });
-            if (this.connected && orderBlock.height > 0) {
-                this.send({ type: 'block', block: orderBlock });
-            }
-        }
-        
-        // Step 2: Place order ONCE in local order book
-        const orderId = this.orderBook.place_buy_order(this.userId, asset, quantityInt, priceInt);
-        console.log('Placed buy order locally with ID:', orderId);
-        
-        // Rest of the execution logic remains the same...
-        const recentTrades = JSON.parse(this.orderBook.get_recent_trades_json());
-        const currentTime = Math.floor(Date.now() / 1000);
-        
-        const newTrade = recentTrades.find(trade => 
-            Math.abs(trade.timestamp - currentTime) < 2 &&
-            trade.buyer === this.userId &&
-            trade.asset === asset
-        );
-        
-        if (newTrade) {
-            const executionTx = {
-                id: `exec_${Date.now()}`,
-                from: newTrade.buyer,
-                to: newTrade.seller,
-                amount: Math.floor(newTrade.quantity * newTrade.price / 100),
-                tx_type: {
-                    TradeExecution: {
-                        asset: newTrade.asset,
-                        quantity: newTrade.quantity,
-                        price: newTrade.price,
-                        buyer: newTrade.buyer,
-                        seller: newTrade.seller
-                    }
-                },
-                timestamp: currentTime
-            };
-            
-            this.blockchain.add_p2p_transaction(JSON.stringify(executionTx));
-            const execSuccess = this.blockchain.mine_block();
-            
-            if (execSuccess) {
-                const execBlock = JSON.parse(this.blockchain.get_latest_block_json());
-                this.storeBlock(execBlock);
-                this.broadcastToP2P({ type: 'blockchain_block', block: execBlock, sender: this.userId });
-                if (this.connected && execBlock.height > 0) {
-                    this.send({ type: 'block', block: execBlock });
+            if (orderSuccess) {
+                const orderBlock = JSON.parse(this.blockchain.get_latest_block_json());
+                this.storeBlock(orderBlock);
+                this.broadcastToP2P({ type: 'blockchain_block', block: orderBlock, sender: this.userId });
+                if (this.connected && orderBlock.height > 0) {
+                    this.send({ type: 'block', block: orderBlock });
                 }
             }
-        }
-
-        this.clearBuyForm();
-        
-        // Only update order book once
-        setTimeout(() => this.updateOrderBook(), 100);
-        this.updateUI();
-        
-    } catch (error) {
-        console.error('Error placing buy order:', error);
-    }
-}
-
-// Similar update for placeSellOrder
-placeSellOrder() {
-    const asset = document.getElementById('sell-asset')?.value;
-    const quantity = parseFloat(document.getElementById('sell-quantity')?.value) || 0;
-    const price = parseFloat(document.getElementById('sell-price')?.value) || 0;
-
-    if (!asset || quantity <= 0 || price <= 0) return;
-
-    try {
-        const quantityInt = Math.floor(quantity * 100);
-        const priceInt = Math.floor(price * 100);
-
-        // Step 1: Create SELL order block
-        this.blockchain.call_contract_sell(asset, quantityInt, priceInt, this.userId);
-        const orderSuccess = this.blockchain.mine_block();
-
-        if (orderSuccess) {
-            const orderBlock = JSON.parse(this.blockchain.get_latest_block_json());
-            this.storeBlock(orderBlock);
-            this.broadcastToP2P({ type: 'blockchain_block', block: orderBlock, sender: this.userId });
-            if (this.connected && orderBlock.height > 0) {
-                this.send({ type: 'block', block: orderBlock });
-            }
-        }
-        
-        // Step 2: Place order ONCE in local order book
-        const orderId = this.orderBook.place_sell_order(this.userId, asset, quantityInt, priceInt);
-        console.log('Placed sell order locally with ID:', orderId);
-        
-        // Rest of the execution logic remains the same...
-        const recentTrades = JSON.parse(this.orderBook.get_recent_trades_json());
-        const currentTime = Math.floor(Date.now() / 1000);
-        
-        const newTrade = recentTrades.find(trade => 
-            Math.abs(trade.timestamp - currentTime) < 2 &&
-            trade.seller === this.userId &&
-            trade.asset === asset
-        );
-        
-        if (newTrade) {
-            const executionTx = {
-                id: `exec_${Date.now()}`,
-                from: newTrade.buyer,
-                to: newTrade.seller,
-                amount: Math.floor(newTrade.quantity * newTrade.price / 100),
-                tx_type: {
-                    TradeExecution: {
-                        asset: newTrade.asset,
-                        quantity: newTrade.quantity,
-                        price: newTrade.price,
-                        buyer: newTrade.buyer,
-                        seller: newTrade.seller
+            
+            // Step 2: Place order and check for immediate execution
+            this.orderBook.place_buy_order(this.userId, asset, quantityInt, priceInt);
+            
+            // Step 3: Check if trade occurred by looking at recent trades
+            const recentTrades = JSON.parse(this.orderBook.get_recent_trades_json());
+            const currentTime = Math.floor(Date.now() / 1000);
+            
+            // Find trades from the last 2 seconds that match our order
+            const newTrade = recentTrades.find(trade => 
+                Math.abs(trade.timestamp - currentTime) < 2 &&
+                trade.buyer === this.userId &&
+                trade.asset === asset
+            );
+            
+            if (newTrade) {
+                // Create execution block
+                const executionTx = {
+                    id: `exec_${Date.now()}`,
+                    from: newTrade.buyer,
+                    to: newTrade.seller,
+                    amount: Math.floor(newTrade.quantity * newTrade.price / 100),
+                    tx_type: {
+                        TradeExecution: {
+                            asset: newTrade.asset,
+                            quantity: newTrade.quantity,
+                            price: newTrade.price,
+                            buyer: newTrade.buyer,
+                            seller: newTrade.seller
+                        }
+                    },
+                    timestamp: currentTime
+                };
+                
+                this.blockchain.add_p2p_transaction(JSON.stringify(executionTx));
+                const execSuccess = this.blockchain.mine_block();
+                
+                if (execSuccess) {
+                    const execBlock = JSON.parse(this.blockchain.get_latest_block_json());
+                    this.storeBlock(execBlock);
+                    this.broadcastToP2P({ type: 'blockchain_block', block: execBlock, sender: this.userId });
+                    if (this.connected && execBlock.height > 0) {
+                        this.send({ type: 'block', block: execBlock });
                     }
-                },
-                timestamp: currentTime
-            };
-            
-            this.blockchain.add_p2p_transaction(JSON.stringify(executionTx));
-            const execSuccess = this.blockchain.mine_block();
-            
-            if (execSuccess) {
-                const execBlock = JSON.parse(this.blockchain.get_latest_block_json());
-                this.storeBlock(execBlock);
-                this.broadcastToP2P({ type: 'blockchain_block', block: execBlock, sender: this.userId });
-                if (this.connected && execBlock.height > 0) {
-                    this.send({ type: 'block', block: execBlock });
                 }
             }
-        }
 
-        this.clearSellForm();
-        
-        // Only update order book once
-        setTimeout(() => this.updateOrderBook(), 100);
-        this.updateUI();
-        
-    } catch (error) {
-        console.error('Error placing sell order:', error);
+            this.clearBuyForm();
+            this.updateOrderBook();
+            this.updateUI();
+            
+        } catch (error) {
+            console.error('Error placing buy order:', error);
+        }
     }
-}
+
+    placeSellOrder() {
+        const asset = document.getElementById('sell-asset')?.value;
+        const quantity = parseFloat(document.getElementById('sell-quantity')?.value) || 0;
+        const price = parseFloat(document.getElementById('sell-price')?.value) || 0;
+
+        if (!asset || quantity <= 0 || price <= 0) return;
+
+        try {
+            const quantityInt = Math.floor(quantity * 100);
+            const priceInt = Math.floor(price * 100);
+
+            // Step 1: Create SELL order block
+            this.blockchain.call_contract_sell(asset, quantityInt, priceInt, this.userId);
+            const orderSuccess = this.blockchain.mine_block();
+
+            if (orderSuccess) {
+                const orderBlock = JSON.parse(this.blockchain.get_latest_block_json());
+                this.storeBlock(orderBlock);
+                this.broadcastToP2P({ type: 'blockchain_block', block: orderBlock, sender: this.userId });
+                if (this.connected && orderBlock.height > 0) {
+                    this.send({ type: 'block', block: orderBlock });
+                }
+            }
+            
+            // Step 2: Place order and check for immediate execution
+            this.orderBook.place_sell_order(this.userId, asset, quantityInt, priceInt);
+            
+            // Step 3: Check if trade occurred by looking at recent trades
+            const recentTrades = JSON.parse(this.orderBook.get_recent_trades_json());
+            const currentTime = Math.floor(Date.now() / 1000);
+            
+            // Find trades from the last 2 seconds that match our order
+            const newTrade = recentTrades.find(trade => 
+                Math.abs(trade.timestamp - currentTime) < 2 &&
+                trade.seller === this.userId &&
+                trade.asset === asset
+            );
+            
+            if (newTrade) {
+                // Create execution block
+                const executionTx = {
+                    id: `exec_${Date.now()}`,
+                    from: newTrade.buyer,
+                    to: newTrade.seller,
+                    amount: Math.floor(newTrade.quantity * newTrade.price / 100),
+                    tx_type: {
+                        TradeExecution: {
+                            asset: newTrade.asset,
+                            quantity: newTrade.quantity,
+                            price: newTrade.price,
+                            buyer: newTrade.buyer,
+                            seller: newTrade.seller
+                        }
+                    },
+                    timestamp: currentTime
+                };
+                
+                this.blockchain.add_p2p_transaction(JSON.stringify(executionTx));
+                const execSuccess = this.blockchain.mine_block();
+                
+                if (execSuccess) {
+                    const execBlock = JSON.parse(this.blockchain.get_latest_block_json());
+                    this.storeBlock(execBlock);
+                    this.broadcastToP2P({ type: 'blockchain_block', block: execBlock, sender: this.userId });
+                    if (this.connected && execBlock.height > 0) {
+                        this.send({ type: 'block', block: execBlock });
+                    }
+                }
+            }
+
+            this.clearSellForm();
+            this.updateOrderBook();
+            this.updateUI();
+            
+        } catch (error) {
+            console.error('Error placing sell order:', error);
+        }
+    }
 
     clearBuyForm() {
         const qty = document.getElementById('buy-quantity');
@@ -818,73 +752,40 @@ placeSellOrder() {
         if (price) price.value = '';
     }
 
-	updateOrderBook() {
-			if (!this.orderBook) return;
+    updateOrderBook() {
+        if (!this.orderBook) return;
 
-			try {
-				// Get local order book only
-				const localOrderBook = JSON.parse(this.orderBook.get_order_book_json());
-				const tradesData = JSON.parse(this.orderBook.get_recent_trades_json());
+        try {
+            const orderBookData = JSON.parse(this.orderBook.get_order_book_json());
+            const tradesData = JSON.parse(this.orderBook.get_recent_trades_json());
 
-				// Update tables with local orders (remote will be added in updateTable)
-				this.updateTable('bids-tbody', localOrderBook.bids || [], 'bid');
-				this.updateTable('asks-tbody', localOrderBook.asks || [], 'ask');
-				this.updateTradesTable(tradesData || []);
+            this.updateTable('bids-tbody', orderBookData.bids || [], 'bid');
+            this.updateTable('asks-tbody', orderBookData.asks || [], 'ask');
+            this.updateTradesTable(tradesData || []);
 
-			} catch (error) {
-				console.error('Error updating order book:', error);
-			}
-	}
+        } catch (error) {
+            console.error('Error updating order book:', error);
+        }
+    }
 
-	updateTable(tableId, localOrders, type) {
-			const tbody = document.getElementById(tableId);
-			if (!tbody) return;
-			
-			// Use enterprise orders as the source of truth (includes updated quantities after trades)
-			const enterpriseOrders = type === 'bid' ? 
-				(this.remoteOrders?.bids || []) : 
-				(this.remoteOrders?.asks || []);
-			
-			// Show all orders from enterprise (both local network and cross-network)
-			const allOrders = enterpriseOrders.map(order => ({
-				...order,
-				isLocal: order.network_id === this.currentNetwork
-			}));
-			
-			console.log(`${type} orders from enterprise:`, allOrders);
-			
-			if (allOrders.length === 0) {
-				tbody.innerHTML = `<tr><td colspan="4">No ${type} orders</td></tr>`;
-				return;
-			}
-			
-			// Sort by price
-			allOrders.sort((a, b) => {
-				const priceA = a.price || 0;
-				const priceB = b.price || 0;
-				return type === 'bid' ? priceB - priceA : priceA - priceB;
-			});
-			
-			// Display orders with clear network labels
-			tbody.innerHTML = allOrders.map(order => {
-				const network = order.network_id || 'unknown';
-				const isLocal = order.isLocal;
-				const traderDisplay = (order.trader || 'unknown').substring(0, 8);
-				
-				// Style remote orders differently
-				const rowStyle = isLocal ? '' : 'background-color: #f0f0f0; font-style: italic;';
-				const networkLabel = isLocal ? '(local)' : `(${network})`;
-				
-				return `
-					<tr style="${rowStyle}">
-						<td>$${((order.price || 0) / 100).toFixed(2)}</td>
-						<td>${((order.quantity || 0) / 100).toFixed(2)}</td>
-						<td>${order.asset || 'N/A'}</td>
-						<td>${traderDisplay}... ${networkLabel}</td>
-					</tr>
-				`;
-			}).join('');
-		}
+    updateTable(tableId, orders, type) {
+        const tbody = document.getElementById(tableId);
+        if (!tbody) return;
+
+        if (orders.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="4">No ${type} orders</td></tr>`;
+            return;
+        }
+
+        tbody.innerHTML = orders.map(order => `
+            <tr>
+                <td>$${(order.price / 100).toFixed(2)}</td>
+                <td>${(order.quantity / 100).toFixed(2)}</td>
+                <td>${order.asset || 'N/A'}</td>
+                <td>${order.trader.substring(0, 8)}...</td>
+            </tr>
+        `).join('');
+    }
 
     updateTradesTable(trades) {
         const tbody = document.getElementById('trades-tbody');
