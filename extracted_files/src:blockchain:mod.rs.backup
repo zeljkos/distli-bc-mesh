@@ -120,6 +120,7 @@ pub struct Blockchain {
     #[cfg(feature = "native")]
     contracts: HashMap<String, SmartContract>,
     #[cfg(feature = "native")]
+    #[cfg(feature = "native")]
     tenant_blocks: Vec<TenantBlockData>,
 }
 
@@ -137,6 +138,7 @@ impl Blockchain {
             storage_path: None,
             #[cfg(feature = "native")]
             contracts: HashMap::new(),
+            #[cfg(feature = "native")]
             #[cfg(feature = "native")]
             tenant_blocks: Vec::new(),
         };
@@ -302,62 +304,55 @@ impl Blockchain {
     }
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
-pub fn call_contract_buy(&mut self, asset: String, quantity: f64, price: f64, sender: String) -> String {
-    let tx_id = format!("buy_{}", Self::current_timestamp());
-    let quantity_u64 = quantity as u64;  // Convert f64 to u64
-    let price_u64 = price as u64;        // Convert f64 to u64
-    
-    // Calculate amount correctly - price and quantity are already in cents
-    let amount = (quantity_u64 * price_u64) / 100; // Divide by 100 to get actual dollar amount
-    
-    let tx = Transaction {
-        id: tx_id.clone(),
-        from: sender,
-        to: "trading_contract".to_string(),
-        amount, // Use corrected amount
-        tx_type: TransactionType::Trading { 
-            asset: asset.clone(), 
-            quantity: quantity_u64, 
-            price: price_u64 
-        },
-        timestamp: Self::current_timestamp(),
-    };
-    self.pending_transactions.push(tx);
-    #[cfg(feature = "native")]
-    self.save_to_disk();
-    
-    format!("{{\"status\": \"success\", \"message\": \"Buy order placed: {} {} @ {}\", \"orderId\": \"{}\"}}", 
-            quantity, asset, price, tx_id)
-}
+    pub fn call_contract_buy(&mut self, asset: String, quantity: f64, price: f64, sender: String) -> String {
+        let tx_id = format!("buy_{}", Self::current_timestamp());
+        let quantity_u64 = quantity as u64;  // Convert f64 to u64
+        let price_u64 = price as u64;        // Convert f64 to u64
+        let tx = Transaction {
+            id: tx_id.clone(),
+            from: sender,
+            to: "trading_contract".to_string(),
+            amount: (price * quantity) as u64,
+            tx_type: TransactionType::Trading { 
+                asset: asset.clone(), 
+                quantity: quantity_u64, 
+                price: price_u64 
+            },
+            timestamp: Self::current_timestamp(),
+        };
+        self.pending_transactions.push(tx);
+        #[cfg(feature = "native")]
+        self.save_to_disk();
+        
+        format!("{{\"status\": \"success\", \"message\": \"Buy order placed: {} {} @ {}\", \"orderId\": \"{}\"}}", 
+                quantity, asset, price, tx_id)
+    }
 
-#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
-pub fn call_contract_sell(&mut self, asset: String, quantity: f64, price: f64, sender: String) -> String {
-    let tx_id = format!("sell_{}", Self::current_timestamp());
-    let quantity_u64 = quantity as u64;  // Convert f64 to u64
-    let price_u64 = price as u64;        // Convert f64 to u64
-    
-    // Calculate amount correctly - price and quantity are already in cents
-    let amount = (quantity_u64 * price_u64) / 100; // Divide by 100 to get actual dollar amount
-    
-    let tx = Transaction {
-        id: tx_id.clone(),
-        from: sender,
-        to: "trading_contract".to_string(),
-        amount, // Use corrected amount
-        tx_type: TransactionType::Trading { 
-            asset: asset.clone(), 
-            quantity: quantity_u64, 
-            price: price_u64 
-        },
-        timestamp: Self::current_timestamp(),
-    };
-    self.pending_transactions.push(tx);
-    #[cfg(feature = "native")]
-    self.save_to_disk();
-    
-    format!("{{\"status\": \"success\", \"message\": \"Sell order placed: {} {} @ {}\", \"orderId\": \"{}\"}}", 
-            quantity, asset, price, tx_id)
-}
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
+    pub fn call_contract_sell(&mut self, asset: String, quantity: f64, price: f64, sender: String) -> String {
+        let tx_id = format!("sell_{}", Self::current_timestamp());
+        let quantity_u64 = quantity as u64;  // Convert f64 to u64
+        let price_u64 = price as u64;        // Convert f64 to u64
+        let tx = Transaction {
+            id: tx_id.clone(),
+            from: sender,
+            to: "trading_contract".to_string(),
+            amount: (price * quantity) as u64,
+            tx_type: TransactionType::Trading { 
+                asset: asset.clone(), 
+                quantity: quantity_u64, 
+                price: price_u64 
+            },
+            timestamp: Self::current_timestamp(),
+        };
+        self.pending_transactions.push(tx);
+        #[cfg(feature = "native")]
+        self.save_to_disk();
+        
+        format!("{{\"status\": \"success\", \"message\": \"Sell order placed: {} {} @ {}\", \"orderId\": \"{}\"}}", 
+                quantity, asset, price, tx_id)
+    }
+
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
     pub fn get_contract_order_book(&self) -> String {
         let mut buy_orders = Vec::new();
@@ -685,7 +680,6 @@ impl Blockchain {
     // Enterprise methods (native only)
     #[cfg(feature = "native")]
     #[cfg(feature = "native")]
-    #[cfg(feature = "native")]
     pub fn add_tenant_blocks(&mut self, update: &TenantBlockchainUpdate) {
         for block in &update.new_blocks {
             self.tenant_blocks.push(block.clone());
@@ -697,7 +691,6 @@ impl Blockchain {
         }
     }
 
-    #[cfg(feature = "native")]
     #[cfg(feature = "native")]
     #[cfg(feature = "native")]
     pub fn get_recent_tenant_blocks(&self, limit: usize) -> Vec<serde_json::Value> {
@@ -719,7 +712,6 @@ impl Blockchain {
         }).collect()
     }
 
-    #[cfg(feature = "native")]
     #[cfg(feature = "native")]
     #[cfg(feature = "native")]
     pub fn get_tenant_summaries(&self) -> Vec<serde_json::Value> {
@@ -837,8 +829,24 @@ impl Blockchain {
 }
 
 // Trading OrderBook - shared between WASM and native
-//
-//
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
+pub struct OrderBook {
+    bids: Vec<Order>,
+    asks: Vec<Order>,
+    trades: Vec<Trade>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Order {
+    pub id: String,
+    pub trader: String,
+    pub asset: String,
+    pub quantity: u64,
+    pub price: u64,
+    pub side: OrderSide,
+    pub timestamp: u64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum OrderSide {
     Buy,
@@ -856,27 +864,6 @@ pub struct Trade {
     pub timestamp: u64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Order {
-    pub id: String,
-    pub trader: String,
-    pub asset: String,
-    pub quantity: u64,
-    pub price: u64,
-    pub side: OrderSide,
-    pub timestamp: u64,
-}
-
-
-#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
-pub struct OrderBook {
-    bids: Vec<Order>,
-    asks: Vec<Order>,
-    trades: Vec<Trade>,
-    next_order_id: u64,
-}
-
-
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 impl OrderBook {
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen(constructor))]
@@ -885,22 +872,20 @@ impl OrderBook {
             bids: Vec::new(),
             asks: Vec::new(),
             trades: Vec::new(),
-            next_order_id: 1,
         }
     }
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
     pub fn place_buy_order(&mut self, trader: String, asset: String, quantity: u32, price: u32) -> String {
         let order = Order {
-            id: format!("buy_{}_{}", self.next_order_id, self.current_timestamp()),
+            id: format!("buy_{}", self.current_timestamp()),
             trader,
             asset,
-            quantity: quantity as u64,
-            price: price as u64,
+            quantity: quantity as u64,  // Convert u32 to u64
+            price: price as u64,        // Convert u32 to u64
             side: OrderSide::Buy,
             timestamp: self.current_timestamp(),
         };
-        self.next_order_id += 1;
         let order_id = order.id.clone();
         self.match_order(order);
         order_id
@@ -909,192 +894,43 @@ impl OrderBook {
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
     pub fn place_sell_order(&mut self, trader: String, asset: String, quantity: u32, price: u32) -> String {
         let order = Order {
-            id: format!("sell_{}_{}", self.next_order_id, self.current_timestamp()),
+            id: format!("sell_{}", self.current_timestamp()),
             trader,
             asset,
-            quantity: quantity as u64,
-            price: price as u64,
+            quantity: quantity as u64,  // Convert u32 to u64
+            price: price as u64,        // Convert u32 to u64
             side: OrderSide::Sell,
             timestamp: self.current_timestamp(),
         };
-        self.next_order_id += 1;
         let order_id = order.id.clone();
         self.match_order(order);
         order_id
     }
 
-    // NEW: Cancel an order
-    #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
-    pub fn cancel_order(&mut self, order_id: String) -> bool {
-        // Try to remove from bids
-        if let Some(pos) = self.bids.iter().position(|o| o.id == order_id) {
-            self.bids.remove(pos);
-            return true;
-        }
-
-        // Try to remove from asks
-        if let Some(pos) = self.asks.iter().position(|o| o.id == order_id) {
-            self.asks.remove(pos);
-            return true;
-        }
-
-        false
-    }
-
-    // NEW: Update order quantity (for partial fills)
-    #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
-    pub fn update_order_quantity(&mut self, order_id: String, new_quantity: u32) -> bool {
-        let new_qty = new_quantity as u64;
-
-        // Update in bids
-        if let Some(order) = self.bids.iter_mut().find(|o| o.id == order_id) {
-            if new_qty == 0 {
-                // Remove order if quantity is 0
-                self.bids.retain(|o| o.id != order_id);
-            } else {
-                order.quantity = new_qty;
-            }
-            // Re-sort bids
-            self.bids.sort_by(|a, b| b.price.cmp(&a.price));
-            return true;
-        }
-
-        // Update in asks
-        if let Some(order) = self.asks.iter_mut().find(|o| o.id == order_id) {
-            if new_qty == 0 {
-                // Remove order if quantity is 0
-                self.asks.retain(|o| o.id != order_id);
-            } else {
-                order.quantity = new_qty;
-            }
-            // Re-sort asks
-            self.asks.sort_by(|a, b| a.price.cmp(&b.price));
-            return true;
-        }
-
-        false
-    }
-
-    // NEW: Execute a cross-network trade and update local order book
-    #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
-    pub fn execute_cross_network_trade(&mut self, asset: String, quantity: u32, price: u32, buyer: String, seller: String) -> String {
-        let qty = quantity as u64;
-        let px = price as u64;
-
-        // Remove/reduce orders that were involved in this trade
-        let mut updated_orders = Vec::new();
-
-        // Update buy orders if buyer is local
-        self.bids.retain_mut(|order| {
-            if order.asset == asset && order.trader == buyer && order.price >= px {
-                if order.quantity <= qty {
-                    updated_orders.push(format!("Removed buy order {}", order.id));
-                    return false; // Remove this order completely
-                } else {
-                    order.quantity -= qty;
-                    updated_orders.push(format!("Updated buy order {} to {} units", order.id, order.quantity));
-                    return true; // Keep order with reduced quantity
-                }
-            }
-            true
-        });
-
-        // Update sell orders if seller is local
-        self.asks.retain_mut(|order| {
-            if order.asset == asset && order.trader == seller && order.price <= px {
-                if order.quantity <= qty {
-                    updated_orders.push(format!("Removed sell order {}", order.id));
-                    return false; // Remove this order completely
-                } else {
-                    order.quantity -= qty;
-                    updated_orders.push(format!("Updated sell order {} to {} units", order.id, order.quantity));
-                    return true; // Keep order with reduced quantity
-                }
-            }
-            true
-        });
-
-        // Record the trade
-        let trade = Trade {
-            id: format!("trade_{}", self.current_timestamp()),
-            asset: asset.clone(),
-            quantity: qty,
-            price: px,
-            buyer: buyer.clone(),
-            seller: seller.clone(),
-            timestamp: self.current_timestamp(),
-        };
-
-        self.trades.push(trade);
-
-        // Keep only last 100 trades
-        if self.trades.len() > 100 {
-            self.trades = self.trades[self.trades.len() - 100..].to_vec();
-        }
-
-        serde_json::json!({
-            "status": "executed",
-            "asset": asset,
-            "quantity": qty,
-            "price": px,
-            "updates": updated_orders
-        }).to_string()
-    }
-
-    // NEW: Clear all orders for a specific trader
-    #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
-    pub fn clear_trader_orders(&mut self, trader: String) -> u32 {
-        let initial_count = self.bids.len() + self.asks.len();
-
-        self.bids.retain(|o| o.trader != trader);
-        self.asks.retain(|o| o.trader != trader);
-
-        let final_count = self.bids.len() + self.asks.len();
-        (initial_count - final_count) as u32
-    }
-
-    // NEW: Get a specific order by ID
-    #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
-    pub fn get_order(&self, order_id: String) -> String {
-        // Check bids
-        if let Some(order) = self.bids.iter().find(|o| o.id == order_id) {
-            return serde_json::to_string(order).unwrap_or_default();
-        }
-
-        // Check asks
-        if let Some(order) = self.asks.iter().find(|o| o.id == order_id) {
-            return serde_json::to_string(order).unwrap_or_default();
-        }
-
-        "{}".to_string()
-    }
-
-    // Keep existing methods...
     fn match_order(&mut self, mut order: Order) {
         let current_time = self.current_timestamp();
-
-        // Get the opposite side orders to match against
+        
         let opposite_orders = match order.side {
             OrderSide::Buy => &mut self.asks,
             OrderSide::Sell => &mut self.bids,
         };
 
-        let mut i = 0;
-        while i < opposite_orders.len() && order.quantity > 0 {
-            let opposite_order = &mut opposite_orders[i];
+        let mut to_remove = Vec::new();
+        
+        for (i, existing_order) in opposite_orders.iter_mut().enumerate() {
+            if existing_order.asset != order.asset {
+                continue;
+            }
 
-            // Check if orders can match (same asset and price crosses)
-            let can_match = order.asset == opposite_order.asset && match order.side {
-                OrderSide::Buy => order.price >= opposite_order.price,  // Buy at ask or higher
-                OrderSide::Sell => order.price <= opposite_order.price, // Sell at bid or lower
+            let can_trade = match order.side {
+                OrderSide::Buy => order.price >= existing_order.price,
+                OrderSide::Sell => order.price <= existing_order.price,
             };
 
-            if can_match {
-                // Execute trade for the minimum quantity
-                let trade_quantity = order.quantity.min(opposite_order.quantity);
-                let trade_price = opposite_order.price; // Price discovery: maker's price
+            if can_trade {
+                let trade_quantity = order.quantity.min(existing_order.quantity);
+                let trade_price = existing_order.price;
 
-                // Create trade record
                 let trade = Trade {
                     id: format!("trade_{}", current_time),
                     asset: order.asset.clone(),
@@ -1102,42 +938,43 @@ impl OrderBook {
                     price: trade_price,
                     buyer: match order.side {
                         OrderSide::Buy => order.trader.clone(),
-                        OrderSide::Sell => opposite_order.trader.clone(),
+                        OrderSide::Sell => existing_order.trader.clone(),
                     },
                     seller: match order.side {
                         OrderSide::Sell => order.trader.clone(),
-                        OrderSide::Buy => opposite_order.trader.clone(),
+                        OrderSide::Buy => existing_order.trader.clone(),
                     },
                     timestamp: current_time,
                 };
 
                 self.trades.push(trade);
-
-                // Update quantities
+                
                 order.quantity -= trade_quantity;
-                opposite_order.quantity -= trade_quantity;
+                existing_order.quantity -= trade_quantity;
 
-                // Remove opposite order if fully filled
-                if opposite_order.quantity == 0 {
-                    opposite_orders.remove(i);
-                } else {
-                    i += 1;
+                if existing_order.quantity == 0 {
+                    to_remove.push(i);
                 }
-            } else {
-                i += 1;
+
+                if order.quantity == 0 {
+                    break;
+                }
             }
         }
 
-        // IMPORTANT: Add remaining order to book if not fully filled
+        for &index in to_remove.iter().rev() {
+            opposite_orders.remove(index);
+        }
+
         if order.quantity > 0 {
             match order.side {
                 OrderSide::Buy => {
                     self.bids.push(order);
-                    self.bids.sort_by(|a, b| b.price.cmp(&a.price)); // Highest price first
+                    self.bids.sort_by(|a, b| b.price.cmp(&a.price));
                 }
                 OrderSide::Sell => {
                     self.asks.push(order);
-                    self.asks.sort_by(|a, b| a.price.cmp(&b.price)); // Lowest price first
+                    self.asks.sort_by(|a, b| a.price.cmp(&b.price));
                 }
             }
         }

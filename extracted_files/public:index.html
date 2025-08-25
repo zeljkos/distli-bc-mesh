@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Distli Mesh BC - Enhanced Multi-Tenant Blockchain</title>
+    <link rel="stylesheet" href="styles/main.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Enhanced Header -->
+        <div class="header">
+            <h1>Distli Mesh BC</h1>
+            <div class="subtitle">Enhanced Multi-Tenant Blockchain with Offline WebRTC & Trading Integration</div>
+            <div class="status-bar">
+                <div class="status-item">
+                    <strong id="peer-count">0</strong> P2P Peers
+                </div>
+                <div class="status-item">
+                    <strong id="block-count">1</strong> Blocks
+                </div>
+                <div class="status-item">
+                    <strong id="network-name">None</strong>
+                </div>
+                <div class="status-item" id="connection-status">
+                    <span id="status">Disconnected</span>
+                </div>
+                <div class="status-item" id="pending-count" style="display: none;">
+                    <span id="pending-messages">0</span> Queued
+                </div>
+            </div>
+        </div>
+
+        <!-- Network Connection Panel -->
+        <div class="network-panel">
+            <div class="connection-panel">
+                <h4>Network Connection & P2P Management</h4>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Server</label>
+                        <input type="text" id="server-input" class="form-control" placeholder="192.168.1.100:3030">
+                    </div>
+                    <div class="form-group">
+                        <label>Network</label>
+                        <select id="network-select" class="form-control">
+                            <option value="">Select network...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Create New</label>
+                        <input type="text" id="network-input" class="form-control" placeholder="Enter network name">
+                    </div>
+                    <div class="form-group">
+                        <button id="refresh-networks-btn" class="btn btn-secondary">Refresh</button>
+                    </div>
+                </div>
+                
+                <div class="button-row">
+                    <button id="connect-btn" class="btn">Connect</button>
+                    <button id="join-network-btn" class="btn" disabled>Join Network</button>
+                    <button id="discover-btn" class="btn" disabled>Discover Peers</button>
+                    <button id="connect-all-btn" class="btn" disabled>Connect All P2P</button>
+		    <button id="sync-offline-btn" class="btn" disabled>Sync Offline Blocks</button>
+                </div>
+                
+                <div class="info-text">
+                    <strong>Offline Mode:</strong> Messages and trading work via P2P even when tracker is down
+                </div>
+            </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <div class="tabs">
+            <button class="tab active">Messaging</button>
+            <button class="tab">Trading</button>
+            <button class="tab"">Order Book</button>
+            <button class="tab">Smart Contracts</button>
+            <button class="tab">Contract Editor</button>
+        </div>
+
+        <!-- Tab Content Container -->
+        <div class="tab-content">
+            <!-- Messaging Tab -->
+            <div id="messaging" class="tab-panel active">
+                <h2>Send Message</h2>
+                <div class="message-form">
+                    <div class="message-input-group">
+                        <input type="text" id="message-input" class="form-control" placeholder="Enter message (automatic blockchain creation)">
+                    </div>
+                    <button onclick="sendMessage()" id="message-btn" class="btn offline-enabled" disabled>Send Message</button>
+                </div>
+
+                <div id="blockchain-display" class="blockchain-display">
+                    <h3>Recent Blockchain Activity</h3>
+                    <div class="info-banner">
+                        <strong>One Block Per Message:</strong> Each message automatically creates its own block
+                    </div>
+                    <div id="blockchain">Loading blockchain data...</div>
+                </div>
+            </div>
+
+            <!-- Trading Tab -->
+            <div id="trading" class="tab-panel">
+                <h2>Decentralized Trading</h2>
+                <div class="info-banner">
+                    <strong>Blockchain Integration:</strong> All trades create permanent blockchain transactions and sync across the network
+                </div>
+                
+                <div class="trading-grid">
+                    <div class="order-form buy-form">
+                        <h3>Buy Order</h3>
+                        <div class="form-group">
+                            <label>Asset</label>
+                            <select id="buy-asset" class="form-control">
+                                <option value="BTC">Bitcoin (BTC)</option>
+                                <option value="ETH">Ethereum (ETH)</option>
+                                <option value="ADA">Cardano (ADA)</option>
+                                <option value="DOT">Polkadot (DOT)</option>
+                                <option value="SOL">Solana (SOL)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Quantity</label>
+                            <input type="number" id="buy-quantity" class="form-control" placeholder="Amount to buy" min="0.01" step="0.01">
+                        </div>
+                        <div class="form-group">
+                            <label>Price (USD)</label>
+                            <input type="number" id="buy-price" class="form-control" placeholder="Price per unit" min="0.01" step="0.01">
+                        </div>
+                        <button onclick="placeBuyOrder()" class="btn btn-buy">Place Buy Order</button>
+                    </div>
+                    
+                    <div class="order-form sell-form">
+                        <h3>Sell Order</h3>
+                        <div class="form-group">
+                            <label>Asset</label>
+                            <select id="sell-asset" class="form-control">
+                                <option value="BTC">Bitcoin (BTC)</option>
+                                <option value="ETH">Ethereum (ETH)</option>
+                                <option value="ADA">Cardano (ADA)</option>
+                                <option value="DOT">Polkadot (DOT)</option>
+                                <option value="SOL">Solana (SOL)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Quantity</label>
+                            <input type="number" id="sell-quantity" class="form-control" placeholder="Amount to sell" min="0.01" step="0.01">
+                        </div>
+                        <div class="form-group">
+                            <label>Price (USD)</label>
+                            <input type="number" id="sell-price" class="form-control" placeholder="Price per unit" min="0.01" step="0.01">
+                        </div>
+                        <button onclick="placeSellOrder()" class="btn btn-sell">Place Sell Order</button>
+                    </div>
+                </div>
+
+                <div class="blockchain-display">
+                    <h3>Trading Blockchain Activity</h3>
+                    <div class="info-banner">
+                        <strong>Trading Transactions:</strong> All buy/sell orders are recorded on the blockchain
+                    </div>
+                    <div id="blockchain-trading">Loading blockchain data...</div>
+                </div>
+            </div>
+
+            <!-- Order Book Tab -->
+            <div id="orderbook" class="tab-panel">
+                <h2>Live Order Book</h2>
+                <button onclick="updateOrderBook()" class="btn refresh-btn">Refresh Order Book</button>
+                
+                <div class="trading-grid">
+                    <div class="order-book-section">
+                        <h3>Buy Orders (Bids)</h3>
+                        <div class="order-book-container">
+                            <table class="order-book">
+                                <thead>
+					<tr><th>Price (USD)</th><th>Quantity</th><th>Asset</th><th>Trader</th></tr>
+                                </thead>
+                                <tbody id="bids-tbody">
+                                    <tr><td colspan="3">No buy orders</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <div class="order-book-section">
+                        <h3>Sell Orders (Asks)</h3>
+                        <div class="order-book-container">
+                            <table class="order-book">
+                                <thead>
+					<tr><th>Price (USD)</th><th>Quantity</th><th>Asset</th><th>Trader</th></tr>
+                                </thead>
+                                <tbody id="asks-tbody">
+                                    <tr><td colspan="3">No sell orders</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="trades-section">
+                    <h3>Recent Trades</h3>
+                    <div class="order-book-container">
+                        <table class="order-book">
+                            <thead>
+                                <tr><th>Time</th><th>Asset</th><th>Quantity</th><th>Price</th><th>Buyer</th><th>Seller</th></tr>
+                            </thead>
+                            <tbody id="trades-tbody">
+                                <tr><td colspan="6">No trades yet</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="blockchain-display">
+                    <h3>Order Book Blockchain Activity</h3>
+                    <div class="info-banner">
+                        <strong>Order Matching:</strong> Successful trades are permanently recorded on blockchain
+                    </div>
+                    <div id="blockchain-orderbook">Loading blockchain data...</div>
+                </div>
+            </div>
+
+            <!-- Smart Contracts Tab -->
+            <div id="contracts" class="tab-panel">
+                <h2>Smart Contracts</h2>
+                <div id="contract-interface">
+                    <div class="info-banner">
+                        Smart contract functionality will be available in future updates.
+                    </div>
+                </div>
+
+                <div class="blockchain-display">
+                    <h3>Smart Contract Blockchain Activity</h3>
+                    <div class="info-banner">
+                        <strong>Contract Transactions:</strong> All smart contract interactions are recorded on blockchain
+                    </div>
+                    <div id="blockchain-contracts">Loading blockchain data...</div>
+                </div>
+            </div>
+
+            <!-- Contract Editor Tab -->
+            <div id="editor" class="tab-panel">
+                <h2>Contract Editor</h2>
+                <div id="contract-editor-interface">
+                    <div class="info-banner">
+                        Contract editor functionality will be available in future updates.
+                    </div>
+                </div>
+
+                <div class="blockchain-display">
+                    <h3>Contract Editor Blockchain Activity</h3>
+                    <div class="info-banner">
+                        <strong>Contract Deployment:</strong> Contract compilation and deployment creates blockchain transactions
+                    </div>
+                    <div id="blockchain-editor">Loading blockchain data...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript Modules -->
+    <script type="module" src="js/app.js"></script>
+</body>
+</html>

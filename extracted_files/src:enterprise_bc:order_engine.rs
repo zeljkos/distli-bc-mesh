@@ -1,8 +1,6 @@
 // src/enterprise_bc/order_engine.rs - FIXED BORROWING ISSUE
 use serde::{Deserialize, Serialize};
 use crate::blockchain::{TenantBlockData, Transaction, TransactionType};
-use std::collections::HashSet;
-
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OrderBookEntry {
@@ -39,8 +37,6 @@ pub struct EnterpriseOrderEngine {
     pub buy_orders: Vec<OrderBookEntry>,
     pub sell_orders: Vec<OrderBookEntry>, 
     pub recent_trades: Vec<Trade>,
-    pub processed_transactions: HashSet<String>, // Track processed transaction IDs
-
 }
 
 impl EnterpriseOrderEngine {
@@ -49,7 +45,6 @@ impl EnterpriseOrderEngine {
             buy_orders: Vec::new(),
             sell_orders: Vec::new(),
             recent_trades: Vec::new(),
-            processed_transactions: HashSet::new(),
         }
     }
 
@@ -60,15 +55,11 @@ impl EnterpriseOrderEngine {
         let mut new_trades = Vec::new();
         
         for tx_string in &block.transactions {
+            println!("Processing transaction: {}", tx_string);
+            
             if let Ok(tx) = serde_json::from_str::<Transaction>(tx_string) {
-                // Skip if already processed
-                if self.processed_transactions.contains(&tx.id) {
-                    println!("Skipping already processed transaction: {}", tx.id);
-                    continue;
-                }
-                
                 if let TransactionType::Trading { asset, quantity, price } = &tx.tx_type {
-                    println!("Processing new trading transaction: {} {} {} @ {}", 
+                    println!("Found trading transaction: {} {} {} @ {}", 
                              tx.id, asset, quantity, price);
                     
                     let order_side = if tx.id.contains("buy_") { 
@@ -88,11 +79,11 @@ impl EnterpriseOrderEngine {
                         timestamp: tx.timestamp,
                     };
                     
+                    println!("Created order: {:?} {} {} @ {} from network {}", 
+                             order.side, order.quantity, order.asset, order.price, order.network_id);
+                    
                     let trades = self.process_order(order);
                     new_trades.extend(trades);
-                    
-                    // Mark as processed
-                    self.processed_transactions.insert(tx.id.clone());
                 }
             }
         }
@@ -100,7 +91,6 @@ impl EnterpriseOrderEngine {
         println!("Block processing complete. Generated {} trades", new_trades.len());
         new_trades
     }
-
 
     fn process_order(&mut self, order: OrderBookEntry) -> Vec<Trade> {
         println!("Processing order: {:?} {} {} @ {} from {}", 
