@@ -10,6 +10,7 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 use uuid::Uuid;
 use warp::ws::{WebSocket, Message as WsMessage};
 use warp::Filter;
+use std::collections::HashSet;
 
 type Networks = Arc<RwLock<HashMap<String, HashMap<String, NetworkPeer>>>>;
 type GlobalPeers = Arc<RwLock<HashMap<String, mpsc::UnboundedSender<Result<WsMessage, warp::Error>>>>>;
@@ -68,6 +69,7 @@ pub struct Tracker {
     enterprise_blockchain: Arc<RwLock<Blockchain>>,
     enterprise_url: Option<String>,
     enterprise_integration: Option<Arc<RwLock<EnterpriseIntegration>>>,
+    processed_blocks: Arc<RwLock<HashSet<String>>>, // Track processed block hashes
 }
 
 impl Tracker {
@@ -78,6 +80,7 @@ impl Tracker {
             enterprise_blockchain: Arc::new(RwLock::new(Blockchain::new())),
             enterprise_url: None,
             enterprise_integration: None,
+            processed_blocks: Arc::new(RwLock::new(HashSet::new())),
         }
     }
     
@@ -98,7 +101,8 @@ impl Tracker {
         let global_peers = self.global_peers.clone();
         let enterprise_blockchain = self.enterprise_blockchain.clone();
         let enterprise_integration = self.enterprise_integration.clone();
-        
+        let processed_blocks = self.processed_blocks.clone(); // Pass to handler
+
         let ws_route = warp::path("ws")
             .and(warp::ws())
             .and(warp::any().map({
@@ -106,10 +110,11 @@ impl Tracker {
                 let global_peers = global_peers.clone();
                 let enterprise_blockchain = enterprise_blockchain.clone();
                 let enterprise_integration = enterprise_integration.clone();
-                move || (networks.clone(), global_peers.clone(), enterprise_blockchain.clone(), enterprise_integration.clone())
+                let processed_blocks = processed_blocks.clone();
+                move || (networks.clone(), global_peers.clone(), enterprise_blockchain.clone(), enterprise_integration.clone(), processed_blocks.clone())
             }))
-            .map(|ws: warp::ws::Ws, (networks, global_peers, enterprise_blockchain, enterprise_integration)| {
-                ws.on_upgrade(move |socket| handle_peer(socket, networks, global_peers, enterprise_blockchain, enterprise_integration))
+            .map(|ws: warp::ws::Ws, (networks, global_peers, enterprise_blockchain, enterprise_integration, processed_blocks)| {
+                ws.on_upgrade(move |socket| handle_peer(socket, networks, global_peers, enterprise_blockchain, enterprise_integration, processed_blocks))
             });
 
         let blockchain_sync_route = warp::path("api")
@@ -331,23 +336,44 @@ async fn handle_blockchain_sync(
 
 async fn send_block_to_enterprise(block: &Block, network_id: &str, peer_id: &str) {
     if let Some(enterprise_url) = std::env::var("ENTERPRISE_BC_URL").ok() {
-        println!("Converting P2P block to enterprise format for network: {}", network_id);
+        println!("Converting P2P block #{} to enterprise format for network: {}", 
+                 block.height, network_id);
         
-        // Convert Block to TenantBlockData with FULL transaction data
+        // Better transaction serialization with error handling
+        let mut transactions = Vec::new();
+        for tx in &block.transactions {
+            match serde_json::to_string(tx) {
+                Ok(tx_json) => {
+                    transactions.push(tx_json);
+                    println!("Serialized transaction: {} (type: {:?})", tx.id, tx.tx_type);
+                }
+                Err(e) => {
+                    println!("Failed to serialize transaction {}: {}", tx.id, e);
+                    // Fallback: create a minimal transaction representation
+                    let fallback = serde_json::json!({
+                        "id": tx.id,
+                        "from": tx.from,
+                        "to": tx.to,
+                        "amount": tx.amount,
+                        "timestamp": tx.timestamp,
+                        "tx_type": format!("{:?}", tx.tx_type)
+                    });
+                    transactions.push(fallback.to_string());
+                }
+            }
+        }
+        
+        // Create TenantBlockData with improved serialization
         let tenant_block = TenantBlockData {
             block_id: block.height,
             block_hash: block.hash.clone(),
-            transactions: block.transactions.iter().map(|tx| {
-                // Serialize complete transaction as JSON string
-                serde_json::to_string(tx).unwrap_or_else(|_| tx.id.clone())
-            }).collect(),
+            transactions,
             timestamp: block.timestamp,
             previous_hash: block.previous_hash.clone(),
             network_id: network_id.to_string(),
         };
-
-        println!("TenantBlockData network_id: {}", tenant_block.network_id);  // Add verification
-
+        
+        println!("TenantBlockData network_id: {}", tenant_block.network_id);
         
         // Create TenantBlockchainUpdate
         let update = TenantBlockchainUpdate {
@@ -382,12 +408,15 @@ async fn send_block_to_enterprise(block: &Block, network_id: &str, peer_id: &str
     }
 }
 
+
+
 async fn handle_peer(
     ws: WebSocket, 
     networks: Networks, 
     global_peers: GlobalPeers,
     _enterprise_blockchain: Arc<RwLock<Blockchain>>,
-    enterprise_integration: Option<Arc<RwLock<EnterpriseIntegration>>>
+    enterprise_integration: Option<Arc<RwLock<EnterpriseIntegration>>>,
+    processed_blocks: Arc<RwLock<HashSet<String>>>,
 ) {
     let peer_id = Uuid::new_v4().to_string();
     let (mut peer_ws_tx, mut peer_ws_rx) = ws.split();
@@ -457,40 +486,32 @@ async fn handle_peer(
                         Message::Block { block } => {
                             println!("Received Block message for block #{}", block.height);
                             if let Some(network_id) = &current_network {
+                                // DEDUPLICATION CHECK - this is the key addition
+                                let block_key = format!("{}:{}", network_id, block.hash);
+                                
+                                {
+                                    let mut processed = processed_blocks.write().await;
+                                    if processed.contains(&block_key) {
+                                        println!("DUPLICATE BLOCK DETECTED: {} in network {} - SKIPPING", 
+                                               block.hash, network_id);
+                                        continue; // Skip processing this duplicate
+                                    }
+                                    processed.insert(block_key.clone());
+                                    println!("NEW BLOCK: {} in network {} - PROCESSING", 
+                                           block.hash, network_id);
+                                }
+                                
                                 println!("Received block #{} from peer {} in network {}", 
                                         block.height, &peer_id[..8], network_id);
                                 
                                 // Broadcast to other peers in the network
                                 broadcast_to_network(&networks, network_id, &peer_id, message.clone()).await;
                                 
-                                // Send to enterprise validator
+                                // Send to enterprise validator (only once now)
                                 send_block_to_enterprise(&block, network_id, &peer_id).await;
                                 
-                                // Also update enterprise integration if available
-                                if let Some(ref integration) = enterprise_integration {
-                                    let tenant_block = TenantBlockData {
-                                        block_id: block.height,
-                                        block_hash: block.hash.clone(),
-                                        transactions: block.transactions.iter().map(|tx| tx.id.clone()).collect(),
-                                        timestamp: block.timestamp,
-                                        previous_hash: block.previous_hash.clone(),
-                                        network_id: network_id.clone(),
-                                    };
-                                    
-                                    let update = TenantBlockchainUpdate {
-                                        network_id: network_id.clone(),
-                                        peer_id: peer_id.clone(),
-                                        new_blocks: vec![tenant_block],
-                                        timestamp: std::time::SystemTime::now()
-                                            .duration_since(std::time::UNIX_EPOCH)
-                                            .unwrap()
-                                            .as_secs(),
-                                    };
-                                    
-                                    let mut integration_lock = integration.write().await;
-                                    integration_lock.update_network_blockchain_state_with_update(&update).await;
-                                    println!("Updated enterprise integration with block #{}", block.height);
-                                }
+                                // Remove the duplicate enterprise integration processing
+                                // Only keep one path to enterprise BC to avoid duplicates
                                 
                                 println!("Block #{} processed and forwarded to enterprise", block.height);
                             }
@@ -582,6 +603,11 @@ async fn handle_peer(
     
     println!("Peer {} disconnected", &peer_id[..8]);
 }
+///////
+//////
+////
+////
+////
 
 async fn handle_network_message(networks: &Networks, network_id: &str, sender_id: &str, message: Message) {
     match message {

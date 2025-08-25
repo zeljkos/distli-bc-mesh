@@ -1,96 +1,96 @@
 {
   "last_reported_state": {
-    "london": {
-      "last_reported_block_id": 1,
-      "last_update": 1756122055
-    },
     "nyc": {
       "last_reported_block_id": 2,
-      "last_update": 1756122124
+      "last_update": 1756134524
+    },
+    "test": {
+      "last_reported_block_id": 1,
+      "last_update": 1756131453
     },
     "tokyo": {
       "last_reported_block_id": 3,
-      "last_update": 1756122178
+      "last_update": 1756134217
     }
   },
   "network_blockchain_state": {
-    "london": {
-      "blocks": [
-        {
-          "block_hash": "7d64aba006316f4ae09fb81f2cdc7b189754157e06f739d879880c096cd56e69",
-          "block_id": 1,
-          "network_id": "london",
-          "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
-          "timestamp": 1756122055,
-          "transactions": [
-            "msg_1756122055"
-          ]
-        }
-      ],
-      "last_block_id": 1,
-      "last_update": 1756124542
-    },
     "nyc": {
       "blocks": [
         {
-          "block_hash": "d55c67617f84c32fc766b301c6609acaccccfec45d26c8e1a708a4cfab988030",
+          "block_hash": "4216b292ae3c459f56c2778c05ff658631664ec3ae8c7b0e50fce5966329e18c",
           "block_id": 1,
           "network_id": "nyc",
           "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
-          "timestamp": 1756122044,
+          "timestamp": 1756134489,
           "transactions": [
-            "msg_1756122044"
+            "sell_1756134489"
           ]
         },
         {
-          "block_hash": "2a87054a73cc63238c873541205c2607110ca3fd43a83351d7462ab984196526",
+          "block_hash": "3e107cdaebbd030ce4620152a043e151f4dfdc58007e1e4edf3aba7b4ea09073",
           "block_id": 2,
           "network_id": "nyc",
-          "previous_hash": "d55c67617f84c32fc766b301c6609acaccccfec45d26c8e1a708a4cfab988030",
-          "timestamp": 1756122124,
+          "previous_hash": "4216b292ae3c459f56c2778c05ff658631664ec3ae8c7b0e50fce5966329e18c",
+          "timestamp": 1756134524,
           "transactions": [
-            "sell_1756122124"
+            "sell_1756134524"
           ]
         }
       ],
       "last_block_id": 2,
-      "last_update": 1756123509
+      "last_update": 1756134524
+    },
+    "test": {
+      "blocks": [
+        {
+          "block_hash": "ec47124461cff647ae4b240fccb1d41e53cfe5f5aa11f4eb9490a5952f06168f",
+          "block_id": 1,
+          "network_id": "test",
+          "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+          "timestamp": 1756131453,
+          "transactions": [
+            "msg_1756131453"
+          ]
+        }
+      ],
+      "last_block_id": 1,
+      "last_update": 1756131453
     },
     "tokyo": {
       "blocks": [
         {
-          "block_hash": "77bc2a42a6c5bbc9af1c46223eddab1b592ed8626afaf632ed9ccc48c9613252",
+          "block_hash": "ff4fca3f229d08ad4de25666b5928b780ad0fafd7c8acd2845686049ba4ecb33",
           "block_id": 1,
           "network_id": "tokyo",
           "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
-          "timestamp": 1756122063,
+          "timestamp": 1756133624,
           "transactions": [
-            "msg_1756122063"
+            "msg_1756133624"
           ]
         },
         {
-          "block_hash": "a6269427f10bbd8dec8b4664f289557155ba2e87a6913aa6bfafdfb38af15ae8",
+          "block_hash": "e2b646c8860be56b3b3fec808b5697037589212088388a7a2f07a6390a6e61c8",
           "block_id": 2,
           "network_id": "tokyo",
-          "previous_hash": "77bc2a42a6c5bbc9af1c46223eddab1b592ed8626afaf632ed9ccc48c9613252",
-          "timestamp": 1756122104,
+          "previous_hash": "615c4e9ba21b222c82ac5ece01f228532485a1cc61b2017e0be4b6a18ac31ef7",
+          "timestamp": 1756133914,
           "transactions": [
-            "buy_1756122104"
+            "buy_1756133914"
           ]
         },
         {
-          "block_hash": "ea9db5fb9459a1047bb5f44262f5fb959a68a9fb1308994005ad2ac35a3a3fac",
+          "block_hash": "c038f8d49f20ab0646a06e2639d1988a2cf17125679535a3fe7307ef73a34611",
           "block_id": 3,
           "network_id": "tokyo",
-          "previous_hash": "a6269427f10bbd8dec8b4664f289557155ba2e87a6913aa6bfafdfb38af15ae8",
-          "timestamp": 1756122151,
+          "previous_hash": "e2b646c8860be56b3b3fec808b5697037589212088388a7a2f07a6390a6e61c8",
+          "timestamp": 1756134217,
           "transactions": [
-            "buy_1756122151"
+            "buy_1756134217"
           ]
         }
       ],
       "last_block_id": 3,
-      "last_update": 1756124751
+      "last_update": 1756134217
     }
   }
 }

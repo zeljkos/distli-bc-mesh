@@ -1,5 +1,5 @@
 // src/enterprise_bc/api.rs - SIMPLIFIED WORKING VERSION
-use crate::blockchain::{Blockchain, TenantBlockchainUpdate};
+use crate::blockchain::{Blockchain, TenantBlockchainUpdate, TenantBlockData};
 use crate::enterprise_bc::order_engine::EnterpriseOrderEngine;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -97,41 +97,118 @@ struct BlocksQuery {
     limit: Option<usize>,
 }
 
+// src/enterprise_bc/api.rs - Add deduplication logic
+
 async fn handle_tenant_blockchain_update(
     update: TenantBlockchainUpdate,
     blockchain: Arc<RwLock<Blockchain>>,
     order_engine: Arc<RwLock<EnterpriseOrderEngine>>,
     tracker_url: Option<String>
 ) -> Result<impl warp::Reply, warp::Rejection> {
-    println!("=== ENTERPRISE BC: Processing tenant update from network: {} ===", update.network_id);
+    println!("ENTERPRISE BC: Processing tenant update from network: {}", update.network_id);
     println!("Blocks to process: {}", update.new_blocks.len());
 
     let blocks_count = update.new_blocks.len();
     let mut transactions_count = 0;
     let mut orders_processed = 0;
+    let mut blocks_processed = 0;
+    let mut blocks_skipped = 0;
 
-    // Store blocks in blockchain first
-    {
-        let mut bc = blockchain.write().await;
-        bc.add_tenant_blocks(&update);
-        println!("Stored blocks in enterprise blockchain");
+    // DEDUPLICATION: Check for existing blocks before processing
+    let new_blocks: Vec<&TenantBlockData> = {
+        let bc = blockchain.read().await;
+        let existing_blocks = bc.get_recent_tenant_blocks(1000); // Get recent blocks to check against
+        
+        update.new_blocks.iter()
+            .filter(|block| {
+                // Check if this block already exists
+                let is_duplicate = existing_blocks.iter().any(|existing| {
+                    if let (Some(existing_hash), Some(existing_network), Some(existing_id)) = (
+                        existing.get("block_hash").and_then(|h| h.as_str()),
+                        existing.get("network_id").and_then(|n| n.as_str()),
+                        existing.get("block_id").and_then(|i| i.as_u64())
+                    ) {
+                        existing_hash == block.block_hash && 
+                        existing_network == block.network_id && 
+                        existing_id == block.block_id as u64
+                    } else {
+                        false
+                    }
+                });
+                
+                if is_duplicate {
+                    println!("SKIPPING duplicate block #{} (hash: {}) from network {}", 
+                            block.block_id, &block.block_hash[..16], block.network_id);
+                    false
+                } else {
+                    println!("NEW block #{} (hash: {}) from network {}", 
+                            block.block_id, &block.block_hash[..16], block.network_id);
+                    true
+                }
+            })
+            .collect()
+    };
+
+    // Count skipped vs processed blocks
+    blocks_processed = new_blocks.len();
+    blocks_skipped = blocks_count - blocks_processed;
+
+    if new_blocks.is_empty() {
+        println!("No new blocks to process - all were duplicates");
+        return Ok(warp::reply::json(&serde_json::json!({
+            "status": "success",
+            "message": "No new blocks to process - all were duplicates",
+            "network_id": update.network_id,
+            "blocks_received": blocks_count,
+            "blocks_processed": 0,
+            "blocks_skipped": blocks_skipped,
+            "transactions_processed": 0,
+            "orders_processed": 0,
+            "trades_executed": 0
+        })));
     }
 
-    // Process each block for order matching
+    // Store NEW blocks in blockchain
+    {
+        let mut bc = blockchain.write().await;
+        // Create a new update with only non-duplicate blocks
+        let filtered_update = TenantBlockchainUpdate {
+            network_id: update.network_id.clone(),
+            peer_id: update.peer_id.clone(),
+            new_blocks: new_blocks.iter().map(|&b| b.clone()).collect(),
+            timestamp: update.timestamp,
+        };
+        bc.add_tenant_blocks(&filtered_update);
+        println!("Stored {} new blocks in enterprise blockchain", new_blocks.len());
+    }
+
+    // Process each NEW block for order matching
     let mut all_trades = Vec::new();
     {
         let mut engine = order_engine.write().await;
 
-        for block in &update.new_blocks {
+        for block in &new_blocks {
             transactions_count += block.transactions.len();
             println!("Processing block {} with {} transactions", block.block_id, block.transactions.len());
 
-            // Count and process trading transactions
-            for tx_string in &block.transactions {
-                if let Ok(tx) = serde_json::from_str::<crate::blockchain::Transaction>(tx_string) {
-                    if matches!(tx.tx_type, crate::blockchain::TransactionType::Trading { .. }) {
-                        orders_processed += 1;
-                        println!("Found trading transaction: {}", tx.id);
+            // Better transaction parsing with detailed logging
+            for (tx_index, tx_string) in block.transactions.iter().enumerate() {
+                println!("Processing transaction {}/{}: {}", 
+                        tx_index + 1, block.transactions.len(), 
+                        &tx_string[..std::cmp::min(50, tx_string.len())]);
+                
+                match serde_json::from_str::<crate::blockchain::Transaction>(tx_string) {
+                    Ok(tx) => {
+                        println!("Parsed transaction: {} (type: {:?})", tx.id, tx.tx_type);
+                        
+                        if matches!(tx.tx_type, crate::blockchain::TransactionType::Trading { .. }) {
+                            orders_processed += 1;
+                            println!("Found trading transaction: {}", tx.id);
+                        }
+                    }
+                    Err(e) => {
+                        println!("Failed to parse transaction: {}", e);
+                        println!("Raw transaction string: {}", tx_string);
                     }
                 }
             }
@@ -144,7 +221,7 @@ async fn handle_tenant_blockchain_update(
         }
     }
 
-    // Send trade notifications back to networks
+    // Send trade notifications back to networks (only if we have new trades)
     if !all_trades.is_empty() {
         println!("Broadcasting {} cross-network trades", all_trades.len());
 
@@ -159,43 +236,21 @@ async fn handle_tenant_blockchain_update(
         } else {
             println!("No tracker URL configured - trades not broadcast");
         }
-    } else {
-        println!("No trades generated from this update");
     }
 
-    println!("=== PROCESSING COMPLETE: {} blocks, {} transactions, {} orders, {} trades ===",
-          blocks_count, transactions_count, orders_processed, all_trades.len());
+    println!("PROCESSING COMPLETE");
+    println!("Summary:");
+    println!("  - Blocks received: {}", blocks_count);
+    println!("  - Blocks processed: {}", blocks_processed);
+    println!("  - Blocks skipped (duplicates): {}", blocks_skipped);
+    println!("  - Transactions processed: {}", transactions_count);
+    println!("  - Orders processed: {}", orders_processed);
+    println!("  - Trades executed: {}", all_trades.len());
 
-    // Small delay if trades were executed to ensure they're fully processed
-    if !all_trades.is_empty() {
-        tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
-    }
-
-    // ALWAYS broadcast order book state after processing (whether trades happened or not)
-    if orders_processed > 0 || !all_trades.is_empty() {
+    // Always broadcast order book state if we processed any blocks
+    if blocks_processed > 0 {
         let engine = order_engine.read().await;
         let all_orders = engine.get_all_orders();
-
-        // Log the current order book state
-        println!("Current order book state:");
-        if let Some(buy_orders) = all_orders.get("buy_orders") {
-            if let Some(buys) = buy_orders.as_array() {
-                println!("  Buy orders: {} total", buys.len());
-                for order in buys {
-                    println!("    - {} {} @ {} from {}",
-                        order["quantity"], order["asset"], order["price"], order["network_id"]);
-                }
-            }
-        }
-        if let Some(sell_orders) = all_orders.get("sell_orders") {
-            if let Some(sells) = sell_orders.as_array() {
-                println!("  Sell orders: {} total", sells.len());
-                for order in sells {
-                    println!("    - {} {} @ {} from {}",
-                        order["quantity"], order["asset"], order["price"], order["network_id"]);
-                }
-            }
-        }
 
         if let Some(ref tracker_url) = tracker_url {
             println!("Broadcasting updated order book to tracker");
@@ -232,15 +287,18 @@ async fn handle_tenant_blockchain_update(
 
     Ok(warp::reply::json(&serde_json::json!({
         "status": "success",
-        "message": "Tenant blocks processed with order matching",
+        "message": "Tenant blocks processed with order matching and deduplication",
         "network_id": update.network_id,
-        "blocks_processed": blocks_count,
+        "blocks_received": blocks_count,
+        "blocks_processed": blocks_processed,
+        "blocks_skipped": blocks_skipped,
         "transactions_processed": transactions_count,
         "orders_processed": orders_processed,
         "trades_executed": all_trades.len(),
         "trades": all_trades
     })))
 }
+
 
 async fn send_trade_to_tracker(trade: &crate::enterprise_bc::order_engine::Trade, tracker_url: &str) {
     let trade_notification = serde_json::json!({

@@ -342,149 +342,241 @@ const DASHBOARD_HTML: &str = r#"
 
         // In the dashboard HTML, replace the parseTransactionData function:
 
-        function parseTransactionData(txString) {
-            try {
-                // First try to parse as JSON
-                const tx = JSON.parse(txString);
-                let typeInfo = { type: 'Unknown', content: '', class: 'transaction-type' };
+    function parseTransactionData(txString) {
+        try {
+            const tx = JSON.parse(txString);
+            let typeInfo = { type: 'Unknown', content: '', class: 'transaction-type' };
+            
+            if (tx.tx_type && tx.tx_type.Message) {
+                typeInfo = {
+                    type: 'Message',
+                    content: tx.tx_type.Message.content || 'Empty message',
+                    class: 'transaction-type message'
+                };
+            } else if (tx.tx_type && tx.tx_type.Trading) {
+                const trading = tx.tx_type.Trading;
+                const quantity = (trading.quantity / 100).toFixed(2);
+                const price = (trading.price / 100).toFixed(2);
                 
-                if (tx.tx_type && tx.tx_type.Message) {
+                const orderType = tx.id.includes("buy_") ? "BUY" : "SELL";
+                
+                typeInfo = {
+                    type: `${orderType} Order`,
+                    content: `${orderType}: ${quantity} ${trading.asset} @ $${price}`,
+                    class: 'transaction-type trading',
+                    orderDetails: {
+                        side: orderType,
+                        asset: trading.asset,
+                        quantity: quantity,
+                        price: price,
+                        trader: tx.from.substring(0, 12) + "..."
+                    }
+                };
+            } else if (tx.tx_type && tx.tx_type.TradeExecution) {
+                const trade = tx.tx_type.TradeExecution;
+                const quantity = (trade.quantity / 100).toFixed(2);
+                const price = (trade.price / 100).toFixed(2);
+                
+                typeInfo = {
+                    type: 'Trade Execution',
+                    content: `EXECUTED: ${quantity} ${trade.asset} @ $${price}`,
+                    class: 'transaction-type trading',
+                    tradeDetails: {
+                        asset: trade.asset,
+                        quantity: quantity,
+                        price: price,
+                        buyer: trade.buyer.substring(0, 12) + "...",
+                        seller: trade.seller.substring(0, 12) + "..."
+                    }
+                };
+            } else if (tx.tx_type === 'Transfer') {
+                typeInfo = {
+                    type: 'Transfer',
+                    content: `Transfer: ${tx.amount} units`,
+                    class: 'transaction-type transfer'
+                };
+            }
+            
+            return { tx, typeInfo };
+            
+        } catch (e) {
+            // Improved fallback parsing
+            let typeInfo = { type: 'Unknown', content: 'Unknown message', class: 'transaction-type' };
+            
+            if (txString.includes('"Message"')) {
+                const messageMatch = txString.match(/"Message":\s*{\s*"content":\s*"([^"]+)"/);
+                if (messageMatch && messageMatch[1]) {
                     typeInfo = {
                         type: 'Message',
-                        content: tx.tx_type.Message.content,
+                        content: messageMatch[1],
                         class: 'transaction-type message'
                     };
-                } else if (tx.tx_type && tx.tx_type.Trading) {
-                    const trading = tx.tx_type.Trading;
-                    const quantity = (trading.quantity / 100).toFixed(2);
-                    const price = (trading.price / 100).toFixed(2);
-                    
-                    const orderType = tx.id.includes("buy_") ? "BUY" : "SELL";
+                }
+            } else if (txString.includes('"Trading"')) {
+                // Handle trading transactions in string format
+                const assetMatch = txString.match(/"asset":"([^"]+)"/);
+                const quantityMatch = txString.match(/"quantity":(\d+)/);
+                const priceMatch = txString.match(/"price":(\d+)/);
+                
+                if (assetMatch && quantityMatch && priceMatch) {
+                    const quantity = (parseInt(quantityMatch[1]) / 100).toFixed(2);
+                    const price = (parseInt(priceMatch[1]) / 100).toFixed(2);
+                    const orderType = txString.includes('buy_') ? 'BUY' : 'SELL';
                     
                     typeInfo = {
                         type: `${orderType} Order`,
-                        content: `${orderType}: ${quantity} ${trading.asset} @ $${price}`,
+                        content: `${orderType}: ${quantity} ${assetMatch[1]} @ $${price}`,
                         class: 'transaction-type trading',
                         orderDetails: {
                             side: orderType,
-                            asset: trading.asset,
+                            asset: assetMatch[1],
                             quantity: quantity,
                             price: price,
-                            trader: tx.from.substring(0, 12) + "..."
+                            trader: 'user...'
                         }
                     };
-                } else if (tx.tx_type === 'Transfer') {
-                    typeInfo = {
-                        type: 'Transfer',
-                        content: `${tx.amount} units`,
-                        class: 'transaction-type transfer'
-                    };
                 }
-                
-                return { tx, typeInfo };
-            } catch (e) {
-                // If JSON parsing fails, try to extract info from the string directly
-                let typeInfo = { type: 'Unknown', content: txString.substring(0, 50), class: 'transaction-type' };
-                
-                if (txString.includes('buy_')) {
-                    typeInfo = {
-                        type: 'BUY Order',
-                        content: 'Buy order transaction',
-                        class: 'transaction-type trading'
-                    };
-                } else if (txString.includes('msg_')) {
-                    typeInfo = {
-                        type: 'Message',
-                        content: 'Message transaction',
-                        class: 'transaction-type message'
-                    };
-                } else if (txString.includes('sell_')) {
-                    typeInfo = {
-                        type: 'SELL Order',
-                        content: 'Sell order transaction',
-                        class: 'transaction-type trading'
-                    };
-                }
-                
-                return {
-                    tx: { id: txString, from: 'system', to: 'system', amount: 0 },
-                    typeInfo
-                };
             }
+            
+            // Create fallback transaction object
+            const tx = {
+                id: txString.match(/"id":"([^"]+)"/)?.[1] || 'unknown',
+                from: txString.match(/"from":"([^"]+)"/)?.[1] || 'system',
+                to: txString.match(/"to":"([^"]+)"/)?.[1] || 'system',
+                amount: 0,
+                timestamp: parseInt(txString.match(/"timestamp":(\d+)/)?.[1] || '0')
+            };
+            
+            return { tx, typeInfo };
         }
+    }
+        
+        
+    async function loadBlocksWithDetails() {
+        try {
+            const response = await fetch(`${API_BASE}/api/blocks?limit=10`);
+            const blocks = await response.json();
 
+            const container = document.getElementById('recent-blocks');
+            container.innerHTML = '';
 
-        async function loadBlocksWithDetails() {
-            try {
-                const response = await fetch(`${API_BASE}/api/blocks?limit=10`);
-                const blocks = await response.json();
+            if (!blocks || blocks.length === 0) {
+                container.innerHTML = '<div>No tenant blocks found</div>';
+                return;
+            }
 
-                const container = document.getElementById('recent-blocks');
-                container.innerHTML = '';
-
-                if (!blocks || blocks.length === 0) {
-                    container.innerHTML = '<div>No tenant blocks found</div>';
-                    return;
-                }
-
-                blocks.reverse().forEach((block, index) => {
-                    const blockDiv = document.createElement('div');
-                    blockDiv.className = 'block';
-
-                    const blockHash = block.block_hash || 'N/A';
+            // FILTER OUT DUPLICATE BLOCKS
+            const uniqueBlocks = [];
+            const seenBlocks = new Set();
+            
+            blocks.forEach(block => {
+                // Create unique key: network + block_id + hash
+                const blockKey = `${block.network_id}-${block.block_id}-${block.block_hash}`;
+                
+                if (!seenBlocks.has(blockKey)) {
+                    seenBlocks.add(blockKey);
+                    
+                    // ALSO filter out blocks with malformed transactions
                     const transactions = block.transactions || [];
-                    const networkId = block.network_id || 'Unknown';
-
-                    let transactionsHtml = '';
-
+                    let hasValidTransaction = false;
+                    
                     if (transactions.length > 0) {
-                        const txElements = transactions.map((txString, txIndex) => {
-                            const { tx, typeInfo } = parseTransactionData(txString);
-                            
-                            let contentHtml = '';
-                            if (typeInfo.orderDetails) {
-                                contentHtml = `
-                                    <div class="order-details">
-                                        <strong>${typeInfo.orderDetails.side} ORDER</strong><br>
-                                        Asset: ${typeInfo.orderDetails.asset}<br>
-                                        Quantity: ${typeInfo.orderDetails.quantity}<br>
-                                        Price: $${typeInfo.orderDetails.price}<br>
-                                        Trader: ${typeInfo.orderDetails.trader}
-                                    </div>
-                                `;
-                            } else if (typeInfo.tradeDetails) {
-                                contentHtml = `
-                                    <div class="trade-execution">
-                                        <strong>TRADE EXECUTED</strong><br>
-                                        Asset: ${typeInfo.tradeDetails.asset}<br>
-                                        Quantity: ${typeInfo.tradeDetails.quantity}<br>
-                                        Price: $${typeInfo.tradeDetails.price}<br>
-                                        Buyer: ${typeInfo.tradeDetails.buyer}<br>
-                                        Seller: ${typeInfo.tradeDetails.seller}
-                                    </div>
-                                `;
-                            } else if (typeInfo.type === 'Message') {
-                                contentHtml = `<div class="message-content">${typeInfo.content}</div>`;
-                            } else {
-                                contentHtml = `<div class="message-content">${typeInfo.content}</div>`;
+                        // Check if at least one transaction parses correctly
+                        for (const txString of transactions) {
+                            try {
+                                const tx = JSON.parse(txString);
+                                if (tx.id && tx.id !== 'unknown' && tx.from && tx.from !== 'system') {
+                                    hasValidTransaction = true;
+                                    break;
+                                }
+                            } catch (e) {
+                                // Try regex parsing for message content
+                                if (txString.includes('"content":"') && txString.match(/"content":"([^"]+)"/)) {
+                                    hasValidTransaction = true;
+                                    break;
+                                }
                             }
-                            
-                            return `
-                                <div class="transaction">
-                                    <div class="transaction-header">
-                                        <span class="${typeInfo.class}">${typeInfo.type}</span>
-                                        Transaction #${txIndex + 1}
-                                    </div>
-                                    <div class="transaction-details">
-                                        <strong>ID:</strong> ${tx.id || 'N/A'}<br>
-                                        <strong>From:</strong> ${(tx.from || 'unknown').substring(0, 12)}...<br>
-                                        <strong>Time:</strong> ${tx.timestamp ? new Date(tx.timestamp * 1000).toLocaleTimeString() : 'N/A'}
-                                    </div>
-                                    ${contentHtml}
+                        }
+                    } else {
+                        // Empty transaction blocks are valid (genesis, etc.)
+                        hasValidTransaction = true;
+                    }
+                    
+                    if (hasValidTransaction) {
+                        uniqueBlocks.push(block);
+                        console.log(`Including block #${block.block_id} from ${block.network_id}`);
+                    } else {
+                        console.log(`Filtering out malformed block #${block.block_id} from ${block.network_id}`);
+                    }
+                } else {
+                    console.log(`🔄 Filtered duplicate block: ${blockKey}`);
+                }
+            });
+
+            uniqueBlocks.reverse().forEach((block, index) => {
+                const blockDiv = document.createElement('div');
+                blockDiv.className = 'block';
+
+                const blockHash = block.block_hash || 'N/A';
+                const transactions = block.transactions || [];
+                const networkId = block.network_id || 'Unknown';
+
+                let transactionsHtml = '';
+
+                if (transactions.length > 0) {
+                    const txElements = transactions.map((txString, txIndex) => {
+                        const { tx, typeInfo } = parseTransactionData(txString);
+                        
+                        // Skip transactions that couldn't be parsed properly
+                        if (!tx || !typeInfo || typeInfo.content === 'Unknown message') {
+                            return '';
+                        }
+                        
+                        let contentHtml = '';
+                        if (typeInfo.orderDetails) {
+                            contentHtml = `
+                                <div class="order-details">
+                                    <strong>${typeInfo.orderDetails.side} ORDER</strong><br>
+                                    Asset: ${typeInfo.orderDetails.asset}<br>
+                                    Quantity: ${typeInfo.orderDetails.quantity}<br>
+                                    Price: $${typeInfo.orderDetails.price}<br>
+                                    Trader: ${typeInfo.orderDetails.trader}
                                 </div>
                             `;
-                        }).join('');
+                        } else if (typeInfo.tradeDetails) {
+                            contentHtml = `
+                                <div class="trade-execution">
+                                    <strong>TRADE EXECUTED</strong><br>
+                                    Asset: ${typeInfo.tradeDetails.asset}<br>
+                                    Quantity: ${typeInfo.tradeDetails.quantity}<br>
+                                    Price: $${typeInfo.tradeDetails.price}<br>
+                                    Buyer: ${typeInfo.tradeDetails.buyer}<br>
+                                    Seller: ${typeInfo.tradeDetails.seller}
+                                </div>
+                            `;
+                        } else if (typeInfo.type === 'Message') {
+                            contentHtml = `<div class="message-content">${typeInfo.content}</div>`;
+                        } else {
+                            contentHtml = `<div class="message-content">${typeInfo.content}</div>`;
+                        }
+                        
+                        return `
+                            <div class="transaction">
+                                <div class="transaction-header">
+                                    <span class="${typeInfo.class}">${typeInfo.type}</span>
+                                    Transaction #${txIndex + 1}
+                                </div>
+                                <div class="transaction-details">
+                                    <strong>ID:</strong> ${tx.id || 'N/A'}<br>
+                                    <strong>From:</strong> ${(tx.from || 'unknown').substring(0, 12)}...<br>
+                                    <strong>Time:</strong> ${tx.timestamp ? new Date(tx.timestamp * 1000).toLocaleTimeString() : 'N/A'}
+                                </div>
+                                ${contentHtml}
+                            </div>
+                        `;
+                    }).filter(html => html.length > 0).join(''); // Filter out empty transaction HTML
 
+                    if (txElements.length > 0) {
                         transactionsHtml = `
                             <div class="transactions-section">
                                 <strong>Transaction Details:</strong>
@@ -494,34 +586,43 @@ const DASHBOARD_HTML: &str = r#"
                     } else {
                         transactionsHtml = `
                             <div class="transactions-section">
-                                <div style="color: #666; font-style: italic;">No transactions in this block</div>
+                                <div style="color: #666; font-style: italic;">No valid transactions in this block</div>
                             </div>
                         `;
                     }
-
-                    blockDiv.innerHTML = `
-                        <div class="block-header">
-                            <span>Tenant Block #${block.block_id || '0'} - Network: ${networkId}</span>
-                            <span class="pos-badge">PoS</span>
+                } else {
+                    transactionsHtml = `
+                        <div class="transactions-section">
+                            <div style="color: #666; font-style: italic;">No transactions in this block</div>
                         </div>
-                        
-                        <div class="block-details">
-                            <div><strong>Hash:</strong> ${blockHash.substring(0, 16)}...</div>
-                            <div><strong>Timestamp:</strong> ${new Date((block.timestamp || 0) * 1000).toLocaleString()}</div>
-                            <div><strong>Transactions:</strong> ${transactions.length}</div>
-                            <div><strong>Consensus:</strong> Proof of Stake</div>
-                        </div>
-                        
-                        ${transactionsHtml}
                     `;
-                    container.appendChild(blockDiv);
-                });
+                }
 
-            } catch (error) {
-                document.getElementById('recent-blocks').innerHTML =
-                    `<div style="color: red;">Failed to load blocks: ${error.message}</div>`;
-            }
+                blockDiv.innerHTML = `
+                    <div class="block-header">
+                        <span>Tenant Block #${block.block_id || '0'} - Network: ${networkId}</span>
+                        <span class="pos-badge">PoS</span>
+                    </div>
+                    
+                    <div class="block-details">
+                        <div><strong>Hash:</strong> ${blockHash.substring(0, 16)}...</div>
+                        <div><strong>Timestamp:</strong> ${new Date((block.timestamp || 0) * 1000).toLocaleString()}</div>
+                        <div><strong>Transactions:</strong> ${transactions.length}</div>
+                        <div><strong>Consensus:</strong> Proof of Stake</div>
+                    </div>
+                    
+                    ${transactionsHtml}
+                `;
+                container.appendChild(blockDiv);
+            });
+
+            console.log(`Displayed ${uniqueBlocks.length} unique blocks (filtered ${blocks.length - uniqueBlocks.length} duplicates)`);
+
+        } catch (error) {
+            document.getElementById('recent-blocks').innerHTML =
+                `<div style="color: red;">Failed to load blocks: ${error.message}</div>`;
         }
+    }
 
         async function loadOrderBookStatus() {
             try {
