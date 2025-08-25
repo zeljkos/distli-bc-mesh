@@ -223,7 +223,6 @@ const DASHBOARD_HTML: &str = r#"
     <div class="container">
         <div class="header">
             <h1>Enterprise Blockchain Dashboard</h1>
-            <p>Cross-Network Order Matching System <span class="pos-badge">PoS</span></p>
         </div>
 
         <div class="config-panel">
@@ -341,8 +340,11 @@ const DASHBOARD_HTML: &str = r#"
             }
         }
 
+        // In the dashboard HTML, replace the parseTransactionData function:
+
         function parseTransactionData(txString) {
             try {
+                // First try to parse as JSON
                 const tx = JSON.parse(txString);
                 let typeInfo = { type: 'Unknown', content: '', class: 'transaction-type' };
                 
@@ -371,23 +373,6 @@ const DASHBOARD_HTML: &str = r#"
                             trader: tx.from.substring(0, 12) + "..."
                         }
                     };
-                } else if (tx.tx_type && tx.tx_type.TradeExecution) {
-                    const trade = tx.tx_type.TradeExecution;
-                    const quantity = (trade.quantity / 100).toFixed(2);
-                    const price = (trade.price / 100).toFixed(2);
-                    
-                    typeInfo = {
-                        type: 'Trade Execution',
-                        content: `EXECUTED: ${quantity} ${trade.asset} @ $${price}`,
-                        class: 'transaction-type execution',
-                        tradeDetails: {
-                            asset: trade.asset,
-                            quantity: quantity,
-                            price: price,
-                            buyer: trade.buyer.substring(0, 12) + "...",
-                            seller: trade.seller.substring(0, 12) + "..."
-                        }
-                    };
                 } else if (tx.tx_type === 'Transfer') {
                     typeInfo = {
                         type: 'Transfer',
@@ -398,12 +383,36 @@ const DASHBOARD_HTML: &str = r#"
                 
                 return { tx, typeInfo };
             } catch (e) {
+                // If JSON parsing fails, try to extract info from the string directly
+                let typeInfo = { type: 'Unknown', content: txString.substring(0, 50), class: 'transaction-type' };
+                
+                if (txString.includes('buy_')) {
+                    typeInfo = {
+                        type: 'BUY Order',
+                        content: 'Buy order transaction',
+                        class: 'transaction-type trading'
+                    };
+                } else if (txString.includes('msg_')) {
+                    typeInfo = {
+                        type: 'Message',
+                        content: 'Message transaction',
+                        class: 'transaction-type message'
+                    };
+                } else if (txString.includes('sell_')) {
+                    typeInfo = {
+                        type: 'SELL Order',
+                        content: 'Sell order transaction',
+                        class: 'transaction-type trading'
+                    };
+                }
+                
                 return {
-                    tx: { id: txString, from: 'unknown', to: 'unknown', amount: 0 },
-                    typeInfo: { type: 'Raw Data', content: txString.substring(0, 50) + "...", class: 'transaction-type' }
+                    tx: { id: txString, from: 'system', to: 'system', amount: 0 },
+                    typeInfo
                 };
             }
         }
+
 
         async function loadBlocksWithDetails() {
             try {
@@ -427,15 +436,10 @@ const DASHBOARD_HTML: &str = r#"
                     const networkId = block.network_id || 'Unknown';
 
                     let transactionsHtml = '';
-                    let orderSummary = { buys: 0, sells: 0, executions: 0 };
 
                     if (transactions.length > 0) {
                         const txElements = transactions.map((txString, txIndex) => {
                             const { tx, typeInfo } = parseTransactionData(txString);
-                            
-                            if (typeInfo.type.includes('BUY')) orderSummary.buys++;
-                            if (typeInfo.type.includes('SELL')) orderSummary.sells++;
-                            if (typeInfo.type.includes('Execution')) orderSummary.executions++;
                             
                             let contentHtml = '';
                             if (typeInfo.orderDetails) {
@@ -481,20 +485,7 @@ const DASHBOARD_HTML: &str = r#"
                             `;
                         }).join('');
 
-                        let orderSummaryHtml = '';
-                        if (orderSummary.buys > 0 || orderSummary.sells > 0 || orderSummary.executions > 0) {
-                            orderSummaryHtml = `
-                                <div class="trading-summary">
-                                    <strong>Trading Activity:</strong> 
-                                    ${orderSummary.buys} Buy Orders, 
-                                    ${orderSummary.sells} Sell Orders, 
-                                    ${orderSummary.executions} Executions
-                                </div>
-                            `;
-                        }
-
                         transactionsHtml = `
-                            ${orderSummaryHtml}
                             <div class="transactions-section">
                                 <strong>Transaction Details:</strong>
                                 ${txElements}

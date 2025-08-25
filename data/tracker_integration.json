@@ -28,7 +28,7 @@
         }
       ],
       "last_block_id": 1,
-      "last_update": 1756122055
+      "last_update": 1756124542
     },
     "nyc": {
       "blocks": [
@@ -54,7 +54,7 @@
         }
       ],
       "last_block_id": 2,
-      "last_update": 1756122124
+      "last_update": 1756123509
     },
     "tokyo": {
       "blocks": [
@@ -90,7 +90,7 @@
         }
       ],
       "last_block_id": 3,
-      "last_update": 1756122178
+      "last_update": 1756124751
     }
   }
 }
