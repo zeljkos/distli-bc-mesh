@@ -1,0 +1,1007 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Contracts Demo - Edge to Enterprise</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px 8px 0 0;
+        }
+
+        .header h1 { margin: 0; }
+        .header .subtitle { 
+            font-size: 14px; 
+            opacity: 0.9; 
+            margin-top: 10px;
+        }
+
+        .tabs {
+            display: flex;
+            background: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .tab {
+            padding: 15px 20px;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            color: #6c757d;
+            border-bottom: 3px solid transparent;
+        }
+
+        .tab:hover { background: #e9ecef; }
+        .tab.active {
+            color: #495057;
+            border-bottom-color: #667eea;
+            font-weight: bold;
+        }
+
+        .tab-content { padding: 20px; }
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
+
+        .contract-deployment {
+            background: #e3f2fd;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 4px solid #2196f3;
+        }
+
+        .contract-interaction {
+            background: #f3e5f5;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 4px solid #9c27b0;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #495057;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.25);
+        }
+
+        .btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            font-size: 14px;
+            cursor: pointer;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+
+        .btn:hover { background: #5a67d8; }
+        .btn:disabled {
+            background: #e9ecef;
+            color: #6c757d;
+            cursor: not-allowed;
+        }
+
+        .btn-success { background: #28a745; }
+        .btn-success:hover { background: #218838; }
+
+        .btn-danger { background: #dc3545; }
+        .btn-danger:hover { background: #c82333; }
+
+        .contract-list {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+
+        .contract-item {
+            background: white;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 6px;
+            border-left: 4px solid #667eea;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .contract-header {
+            font-weight: bold;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .contract-details {
+            font-size: 12px;
+            color: #6c757d;
+            margin-bottom: 10px;
+        }
+
+        .contract-state {
+            background: #e3f2fd;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            margin-top: 10px;
+        }
+
+        .function-buttons {
+            margin-top: 15px;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status-deployed { background: #28a745; }
+        .status-pending { background: #ffc107; }
+        .status-error { background: #dc3545; }
+
+        .execution-result {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+
+        .execution-error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+
+        .network-status {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .sync-status {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+            font-size: 12px;
+        }
+
+        .counter-display {
+            font-size: 48px;
+            font-weight: bold;
+            text-align: center;
+            color: #667eea;
+            margin: 20px 0;
+        }
+
+        .token-balance {
+            background: #f0f8ff;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            border-left: 4px solid #007bff;
+        }
+
+        .voting-results {
+            margin-top: 15px;
+        }
+
+        .vote-option {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            margin: 5px 0;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+
+        .vote-bar {
+            height: 20px;
+            background: #667eea;
+            border-radius: 10px;
+            margin-left: 10px;
+            flex-grow: 1;
+            max-width: 200px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>🚀 Smart Contracts: Edge to Enterprise</h1>
+            <div class="subtitle">Deploy and execute smart contracts at the edge with enterprise blockchain synchronization</div>
+        </div>
+
+        <!-- Network Status -->
+        <div class="tab-content">
+            <div class="network-status">
+                <strong>Network Status:</strong> 
+                <span id="network-status">Initializing...</span>
+                <div id="sync-info" class="sync-status" style="display: none;">
+                    Edge contracts sync to enterprise blockchain every 10 seconds
+                </div>
+            </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <div class="tabs">
+            <button class="tab active" onclick="showTab('deploy')">Deploy Contracts</button>
+            <button class="tab" onclick="showTab('counter')">Counter</button>
+            <button class="tab" onclick="showTab('orderbook')">Order Book</button>
+            <button class="tab" onclick="showTab('nft')">NFT</button>
+            <button class="tab" onclick="showTab('token')">Token</button>
+            <button class="tab" onclick="showTab('voting')">Voting</button>
+            <button class="tab" onclick="showTab('list')">All Contracts</button>
+        </div>
+
+        <!-- Tab Content -->
+        <div class="tab-content">
+            <!-- Deploy Contracts Tab -->
+            <div id="deploy" class="tab-panel active">
+                <h2>Deploy Smart Contracts</h2>
+                
+                <div class="contract-deployment">
+                    <h3>📝 Counter Contract</h3>
+                    <p>Simple counter that can be incremented/decremented by anyone</p>
+                    <button class="btn btn-success" onclick="deployContract('counter', '{}')">
+                        Deploy Counter Contract
+                    </button>
+                </div>
+
+                <div class="contract-deployment">
+                    <h3>🪙 Simple Token Contract</h3>
+                    <p>ERC20-like token with mint/transfer functionality</p>
+                    
+                    <div class="form-group">
+                        <label>Token Name:</label>
+                        <input type="text" id="token-name" class="form-control" value="EdgeCoin" placeholder="Token name">
+                    </div>
+                    <div class="form-group">
+                        <label>Symbol:</label>
+                        <input type="text" id="token-symbol" class="form-control" value="EDGE" placeholder="Token symbol">
+                    </div>
+                    <div class="form-group">
+                        <label>Total Supply:</label>
+                        <input type="number" id="token-supply" class="form-control" value="1000000" placeholder="Initial supply">
+                    </div>
+                    <button class="btn btn-success" onclick="deployTokenContract()">
+                        Deploy Token Contract
+                    </button>
+                </div>
+
+                <div class="contract-deployment">
+                    <h3>📊 Order Book Contract</h3>
+                    <p>Decentralized order book for trading assets</p>
+                    
+                    <div class="form-group">
+                        <label>Asset Symbol:</label>
+                        <input type="text" id="orderbook-asset" class="form-control" value="BTC/USD" placeholder="Asset symbol">
+                    </div>
+                    <button class="btn btn-success" onclick="deployOrderBookContract()">
+                        Deploy Order Book Contract
+                    </button>
+                </div>
+
+                <div class="contract-deployment">
+                    <h3>🎨 NFT Contract</h3>
+                    <p>Non-fungible token collection</p>
+                    
+                    <div class="form-group">
+                        <label>Collection Name:</label>
+                        <input type="text" id="nft-name" class="form-control" value="EdgeArt" placeholder="Collection name">
+                    </div>
+                    <div class="form-group">
+                        <label>Symbol:</label>
+                        <input type="text" id="nft-symbol" class="form-control" value="EART" placeholder="NFT symbol">
+                    </div>
+                    <button class="btn btn-success" onclick="deployNFTContract()">
+                        Deploy NFT Contract
+                    </button>
+                </div>
+
+                <div class="contract-deployment">
+                    <h3>🗳️ Voting Contract</h3>
+                    <p>Simple voting system with multiple options</p>
+                    
+                    <div class="form-group">
+                        <label>Vote Title:</label>
+                        <input type="text" id="vote-title" class="form-control" value="Favorite Programming Language" placeholder="Voting topic">
+                    </div>
+                    <div class="form-group">
+                        <label>Options (comma-separated):</label>
+                        <input type="text" id="vote-options" class="form-control" value="Rust,TypeScript,Go,Python" placeholder="Option1,Option2,Option3">
+                    </div>
+                    <button class="btn btn-success" onclick="deployVotingContract()">
+                        Deploy Voting Contract
+                    </button>
+                </div>
+            </div>
+
+            <!-- Counter Contract Tab -->
+            <div id="counter" class="tab-panel">
+                <h2>Counter Contract Interaction</h2>
+                <div id="counter-contracts">
+                    <p>Deploy a counter contract first to interact with it.</p>
+                </div>
+            </div>
+
+            <!-- Order Book Contract Tab -->
+            <div id="orderbook" class="tab-panel">
+                <h2>Order Book Contract Interaction</h2>
+                <div id="orderbook-contracts">
+                    <p>Deploy an order book contract first to interact with it.</p>
+                </div>
+            </div>
+
+            <!-- NFT Contract Tab -->
+            <div id="nft" class="tab-panel">
+                <h2>NFT Contract Interaction</h2>
+                <div id="nft-contracts">
+                    <p>Deploy an NFT contract first to interact with it.</p>
+                </div>
+            </div>
+
+            <!-- Token Contract Tab -->
+            <div id="token" class="tab-panel">
+                <h2>Token Contract Interaction</h2>
+                <div id="token-contracts">
+                    <p>Deploy a token contract first to interact with it.</p>
+                </div>
+            </div>
+
+            <!-- Voting Contract Tab -->
+            <div id="voting" class="tab-panel">
+                <h2>Voting Contract Interaction</h2>
+                <div id="voting-contracts">
+                    <p>Deploy a voting contract first to interact with it.</p>
+                </div>
+            </div>
+
+            <!-- All Contracts Tab -->
+            <div id="list" class="tab-panel">
+                <h2>All Smart Contracts</h2>
+                <button class="btn" onclick="refreshContracts()">🔄 Refresh Contracts</button>
+                <div class="contract-list">
+                    <div id="contracts-list">
+                        <p>Loading contracts...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        // Import the WASM module
+        import init, { SmartContractExecutor } from './pkg/distli_mesh_bc.js';
+
+        class SmartContractsDemo {
+            constructor() {
+                this.contractExecutor = null;
+                this.userId = 'user_' + Math.random().toString(36).substr(2, 9);
+                this.deployedContracts = new Map();
+            }
+
+            async init() {
+                try {
+                    await init();
+                    this.contractExecutor = new SmartContractExecutor();
+                    this.updateNetworkStatus('Connected to Edge Network');
+                    
+                    // Simulate enterprise sync
+                    this.startEnterpriseSync();
+                    
+                    console.log('Smart Contracts Demo initialized');
+                    this.refreshContracts();
+                } catch (error) {
+                    console.error('Init failed:', error);
+                    this.updateNetworkStatus('Failed to initialize');
+                }
+            }
+
+            updateNetworkStatus(status) {
+                document.getElementById('network-status').textContent = status;
+                if (status.includes('Connected')) {
+                    document.getElementById('sync-info').style.display = 'block';
+                }
+            }
+
+            startEnterpriseSync() {
+                // Simulate periodic sync with enterprise blockchain
+                setInterval(() => {
+                    console.log('📡 Syncing contracts state to enterprise blockchain...');
+                    // In real implementation, this would send contract states to enterprise BC
+                }, 10000);
+            }
+
+            deployContract(contractType, initData) {
+                if (!this.contractExecutor) return;
+
+                try {
+                    const result = this.contractExecutor.deploy_contract(
+                        contractType, 
+                        initData, 
+                        this.userId
+                    );
+                    
+                    const resultObj = JSON.parse(result);
+                    console.log('Contract deployed:', resultObj);
+                    
+                    // Show success message
+                    this.showExecutionResult(resultObj, 'deploy');
+                    
+                    // Refresh contract lists
+                    setTimeout(() => {
+                        this.refreshContracts();
+                        this.updateContractTabs();
+                    }, 100);
+                    
+                } catch (error) {
+                    console.error('Deploy failed:', error);
+                    this.showExecutionResult({error: error.message}, 'deploy');
+                }
+            }
+
+            deployTokenContract() {
+                const name = document.getElementById('token-name').value || 'EdgeCoin';
+                const symbol = document.getElementById('token-symbol').value || 'EDGE';
+                const supply = parseInt(document.getElementById('token-supply').value) || 1000000;
+
+                const initData = JSON.stringify({
+                    name: name,
+                    symbol: symbol,
+                    total_supply: supply
+                });
+
+                this.deployContract('token', initData);
+            }
+
+            deployOrderBookContract() {
+                const asset = document.getElementById('orderbook-asset').value || 'BTC/USD';
+                const initData = JSON.stringify({ asset: asset });
+                this.deployContract('orderbook', initData);
+            }
+
+            deployNFTContract() {
+                const name = document.getElementById('nft-name').value || 'EdgeArt';
+                const symbol = document.getElementById('nft-symbol').value || 'EART';
+                const initData = JSON.stringify({ name: name, symbol: symbol });
+                this.deployContract('nft', initData);
+            }
+
+            deployVotingContract() {
+                const title = document.getElementById('vote-title').value || 'Vote';
+                const optionsStr = document.getElementById('vote-options').value || 'Option1,Option2';
+                const options = optionsStr.split(',').map(s => s.trim()).filter(s => s.length > 0);
+
+                const initData = JSON.stringify({
+                    title: title,
+                    options: options
+                });
+
+                this.deployContract('voting', initData);
+            }
+
+            callContract(contractId, functionName, params = '{}') {
+                if (!this.contractExecutor) return;
+
+                try {
+                    const result = this.contractExecutor.call_contract(
+                        contractId,
+                        functionName,
+                        params,
+                        this.userId
+                    );
+                    
+                    const resultObj = JSON.parse(result);
+                    console.log('Contract call result:', resultObj);
+                    
+                    this.showExecutionResult(resultObj, contractId);
+                    
+                    // Update contract display
+                    setTimeout(() => this.updateContractDisplay(contractId), 100);
+                    
+                } catch (error) {
+                    console.error('Contract call failed:', error);
+                    this.showExecutionResult({error: error.message}, contractId);
+                }
+            }
+
+            refreshContracts() {
+                if (!this.contractExecutor) return;
+
+                try {
+                    const result = this.contractExecutor.list_contracts();
+                    const contractsData = JSON.parse(result);
+                    
+                    this.displayContractsList(contractsData.contracts);
+                    this.updateContractTabs();
+                    
+                } catch (error) {
+                    console.error('Failed to refresh contracts:', error);
+                }
+            }
+
+            displayContractsList(contracts) {
+                const container = document.getElementById('contracts-list');
+                
+                if (!contracts || contracts.length === 0) {
+                    container.innerHTML = '<p>No contracts deployed yet.</p>';
+                    return;
+                }
+
+                let html = '';
+                contracts.forEach(contract => {
+                    const state = this.getContractState(contract.contract_id);
+                    html += `
+                        <div class="contract-item">
+                            <div class="contract-header">
+                                <span>
+                                    <span class="status-indicator status-deployed"></span>
+                                    ${contract.contract_id} (${contract.contract_type})
+                                </span>
+                                <small>${new Date(contract.created_at * 1000).toLocaleTimeString()}</small>
+                            </div>
+                            <div class="contract-details">
+                                Owner: ${contract.owner.substring(0, 12)}... | 
+                                Last Updated: ${new Date(contract.last_updated * 1000).toLocaleTimeString()}
+                            </div>
+                            ${state ? `<div class="contract-state">${JSON.stringify(state, null, 2)}</div>` : ''}
+                        </div>
+                    `;
+                });
+                
+                container.innerHTML = html;
+            }
+
+            updateContractTabs() {
+                this.updateCounterTab();
+                this.updateOrderBookTab();
+                this.updateNFTTab();
+                this.updateTokenTab();
+                this.updateVotingTab();
+            }
+
+            updateCounterTab() {
+                const container = document.getElementById('counter-contracts');
+                const contracts = this.getContractsByType('counter');
+                
+                if (contracts.length === 0) {
+                    container.innerHTML = '<p>Deploy a counter contract first to interact with it.</p>';
+                    return;
+                }
+
+                let html = '';
+                contracts.forEach(contract => {
+                    const state = this.getContractState(contract.contract_id);
+                    const count = state?.count || 0;
+                    
+                    html += `
+                        <div class="contract-item">
+                            <div class="contract-header">
+                                <span>Counter: ${contract.contract_id}</span>
+                            </div>
+                            <div class="counter-display">${count}</div>
+                            <div class="function-buttons">
+                                <button class="btn btn-success" onclick="app.callContract('${contract.contract_id}', 'increment')">
+                                    ➕ Increment
+                                </button>
+                                <button class="btn btn-danger" onclick="app.callContract('${contract.contract_id}', 'decrement')">
+                                    ➖ Decrement
+                                </button>
+                                <button class="btn" onclick="app.callContract('${contract.contract_id}', 'get_count')">
+                                    🔍 Get Count
+                                </button>
+                            </div>
+                            <div id="result-${contract.contract_id}"></div>
+                        </div>
+                    `;
+                });
+                
+                container.innerHTML = html;
+            }
+
+            updateOrderBookTab() {
+                const container = document.getElementById('orderbook-contracts');
+                const contracts = this.getContractsByType('orderbook');
+                
+                if (contracts.length === 0) {
+                    container.innerHTML = '<p>Deploy an order book contract first to interact with it.</p>';
+                    return;
+                }
+
+                let html = '';
+                contracts.forEach(contract => {
+                    const state = this.getContractState(contract.contract_id);
+                    const asset = state?.asset || 'BTC/USD';
+                    
+                    html += `
+                        <div class="contract-item">
+                            <div class="contract-header">
+                                <span>Order Book: ${asset}</span>
+                            </div>
+                            <div class="form-group">
+                                <label>Price:</label>
+                                <input type="number" id="price-${contract.contract_id}" class="form-control" placeholder="Price" step="0.01">
+                            </div>
+                            <div class="form-group">
+                                <label>Quantity:</label>
+                                <input type="number" id="quantity-${contract.contract_id}" class="form-control" placeholder="Quantity" step="0.01">
+                            </div>
+                            <div class="function-buttons">
+                                <button class="btn btn-success" onclick="app.placeBid('${contract.contract_id}')">
+                                    📈 Place Bid
+                                </button>
+                                <button class="btn btn-danger" onclick="app.placeAsk('${contract.contract_id}')">
+                                    📉 Place Ask
+                                </button>
+                                <button class="btn" onclick="app.callContract('${contract.contract_id}', 'get_orderbook')">
+                                    📊 View Order Book
+                                </button>
+                            </div>
+                            <div id="result-${contract.contract_id}"></div>
+                        </div>
+                    `;
+                });
+                
+                container.innerHTML = html;
+            }
+
+            updateNFTTab() {
+                const container = document.getElementById('nft-contracts');
+                const contracts = this.getContractsByType('nft');
+                
+                if (contracts.length === 0) {
+                    container.innerHTML = '<p>Deploy an NFT contract first to interact with it.</p>';
+                    return;
+                }
+
+                let html = '';
+                contracts.forEach(contract => {
+                    const state = this.getContractState(contract.contract_id);
+                    const name = state?.name || 'NFT Collection';
+                    const symbol = state?.symbol || 'NFT';
+                    
+                    html += `
+                        <div class="contract-item">
+                            <div class="contract-header">
+                                <span>${name} (${symbol})</span>
+                            </div>
+                            <div class="form-group">
+                                <label>Metadata:</label>
+                                <input type="text" id="metadata-${contract.contract_id}" class="form-control" placeholder="NFT metadata/description">
+                            </div>
+                            <div class="form-group">
+                                <label>Mint To:</label>
+                                <input type="text" id="mint-to-${contract.contract_id}" class="form-control" placeholder="Recipient address (optional)">
+                            </div>
+                            <div class="function-buttons">
+                                <button class="btn btn-success" onclick="app.mintNFT('${contract.contract_id}')">
+                                    🎨 Mint NFT
+                                </button>
+                            </div>
+                            <div class="form-group">
+                                <label>Token ID to Query:</label>
+                                <input type="number" id="token-id-${contract.contract_id}" class="form-control" placeholder="Token ID" value="1">
+                            </div>
+                            <div class="function-buttons">
+                                <button class="btn" onclick="app.getNFTOwner('${contract.contract_id}')">
+                                    👤 Get Owner
+                                </button>
+                                <button class="btn" onclick="app.getNFTMetadata('${contract.contract_id}')">
+                                    📋 Get Metadata
+                                </button>
+                            </div>
+                            <div id="result-${contract.contract_id}"></div>
+                        </div>
+                    `;
+                });
+                
+                container.innerHTML = html;
+            }
+
+            updateTokenTab() {
+                const container = document.getElementById('token-contracts');
+                const contracts = this.getContractsByType('token');
+                
+                if (contracts.length === 0) {
+                    container.innerHTML = '<p>Deploy a token contract first to interact with it.</p>';
+                    return;
+                }
+
+                let html = '';
+                contracts.forEach(contract => {
+                    const state = this.getContractState(contract.contract_id);
+                    const balance = state?.[`balance_${this.userId}`] || 0;
+                    const name = state?.name || 'Token';
+                    const symbol = state?.symbol || 'TKN';
+                    
+                    html += `
+                        <div class="contract-item">
+                            <div class="contract-header">
+                                <span>${name} (${symbol}): ${contract.contract_id}</span>
+                            </div>
+                            <div class="token-balance">
+                                <strong>Your Balance: ${balance} ${symbol}</strong>
+                            </div>
+                            <div class="form-group">
+                                <label>Transfer To:</label>
+                                <input type="text" id="transfer-to-${contract.contract_id}" class="form-control" placeholder="Recipient address">
+                            </div>
+                            <div class="form-group">
+                                <label>Amount:</label>
+                                <input type="number" id="transfer-amount-${contract.contract_id}" class="form-control" placeholder="Amount to transfer">
+                            </div>
+                            <div class="function-buttons">
+                                <button class="btn btn-success" onclick="app.transferTokens('${contract.contract_id}')">
+                                    💸 Transfer
+                                </button>
+                                <button class="btn" onclick="app.callContract('${contract.contract_id}', 'balance_of', JSON.stringify({address: '${this.userId}'}))">
+                                    💰 Check Balance
+                                </button>
+                            </div>
+                            <div id="result-${contract.contract_id}"></div>
+                        </div>
+                    `;
+                });
+                
+                container.innerHTML = html;
+            }
+
+            updateVotingTab() {
+                const container = document.getElementById('voting-contracts');
+                const contracts = this.getContractsByType('voting');
+                
+                if (contracts.length === 0) {
+                    container.innerHTML = '<p>Deploy a voting contract first to interact with it.</p>';
+                    return;
+                }
+
+                let html = '';
+                contracts.forEach(contract => {
+                    const state = this.getContractState(contract.contract_id);
+                    const title = state?.title || 'Vote';
+                    const options = state?.options || [];
+                    
+                    html += `
+                        <div class="contract-item">
+                            <div class="contract-header">
+                                <span>Vote: ${title}</span>
+                            </div>
+                            <div class="form-group">
+                                <label>Choose Option:</label>
+                                <select id="vote-option-${contract.contract_id}" class="form-control">
+                                    ${options.map((opt, i) => `<option value="${i}">${opt}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div class="function-buttons">
+                                <button class="btn btn-success" onclick="app.castVote('${contract.contract_id}')">
+                                    🗳️ Cast Vote
+                                </button>
+                                <button class="btn" onclick="app.callContract('${contract.contract_id}', 'get_results')">
+                                    📊 View Results
+                                </button>
+                            </div>
+                            <div id="result-${contract.contract_id}"></div>
+                        </div>
+                    `;
+                });
+                
+                container.innerHTML = html;
+            }
+
+            transferTokens(contractId) {
+                const to = document.getElementById(`transfer-to-${contractId}`).value;
+                const amount = parseInt(document.getElementById(`transfer-amount-${contractId}`).value);
+                
+                if (!to || !amount || amount <= 0) {
+                    alert('Please enter valid recipient and amount');
+                    return;
+                }
+
+                const params = JSON.stringify({ to, amount });
+                this.callContract(contractId, 'transfer', params);
+            }
+
+            castVote(contractId) {
+                const option = parseInt(document.getElementById(`vote-option-${contractId}`).value);
+                const params = JSON.stringify({ option });
+                this.callContract(contractId, 'vote', params);
+            }
+
+            placeBid(contractId) {
+                const price = parseFloat(document.getElementById(`price-${contractId}`).value);
+                const quantity = parseFloat(document.getElementById(`quantity-${contractId}`).value);
+                
+                if (!price || !quantity || price <= 0 || quantity <= 0) {
+                    alert('Please enter valid price and quantity');
+                    return;
+                }
+                
+                const params = JSON.stringify({ price, quantity });
+                this.callContract(contractId, 'place_bid', params);
+            }
+
+            placeAsk(contractId) {
+                const price = parseFloat(document.getElementById(`price-${contractId}`).value);
+                const quantity = parseFloat(document.getElementById(`quantity-${contractId}`).value);
+                
+                if (!price || !quantity || price <= 0 || quantity <= 0) {
+                    alert('Please enter valid price and quantity');
+                    return;
+                }
+                
+                const params = JSON.stringify({ price, quantity });
+                this.callContract(contractId, 'place_ask', params);
+            }
+
+            mintNFT(contractId) {
+                const metadata = document.getElementById(`metadata-${contractId}`).value || 'NFT #' + Date.now();
+                const to = document.getElementById(`mint-to-${contractId}`).value || this.userId;
+                
+                const params = JSON.stringify({ metadata, to });
+                this.callContract(contractId, 'mint', params);
+            }
+
+            getNFTOwner(contractId) {
+                const tokenId = parseInt(document.getElementById(`token-id-${contractId}`).value) || 1;
+                const params = JSON.stringify({ token_id: tokenId });
+                this.callContract(contractId, 'get_owner', params);
+            }
+
+            getNFTMetadata(contractId) {
+                const tokenId = parseInt(document.getElementById(`token-id-${contractId}`).value) || 1;
+                const params = JSON.stringify({ token_id: tokenId });
+                this.callContract(contractId, 'get_metadata', params);
+            }
+
+            getContractState(contractId) {
+                if (!this.contractExecutor) return null;
+                
+                try {
+                    const result = this.contractExecutor.get_contract_state(contractId);
+                    const stateData = JSON.parse(result);
+                    return stateData.state;
+                } catch (error) {
+                    console.error('Failed to get contract state:', error);
+                    return null;
+                }
+            }
+
+            getContractsByType(type) {
+                if (!this.contractExecutor) return [];
+                
+                try {
+                    const result = this.contractExecutor.list_contracts();
+                    const contractsData = JSON.parse(result);
+                    return contractsData.contracts.filter(c => c.contract_type.includes(type));
+                } catch (error) {
+                    return [];
+                }
+            }
+
+            updateContractDisplay(contractId) {
+                // Update the specific contract display after state changes
+                this.refreshContracts();
+            }
+
+            showExecutionResult(result, containerId) {
+                let container = document.getElementById(`result-${containerId}`);
+                if (!container) {
+                    // Create a temporary container for deployment results
+                    container = document.createElement('div');
+                    container.className = 'execution-result';
+                    document.querySelector('.contract-deployment').appendChild(container);
+                }
+
+                const isError = result.error || !result.success;
+                container.className = isError ? 'execution-result execution-error' : 'execution-result';
+                container.innerHTML = `<pre>${JSON.stringify(result, null, 2)}</pre>`;
+                
+                // Auto-hide after 5 seconds
+                setTimeout(() => {
+                    if (container.parentNode) {
+                        container.style.display = 'none';
+                    }
+                }, 5000);
+            }
+        }
+
+        // Tab navigation
+        window.showTab = function(tabName) {
+            document.querySelectorAll('.tab-panel').forEach(panel => {
+                panel.classList.remove('active');
+            });
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            document.getElementById(tabName).classList.add('active');
+            event.target.classList.add('active');
+        };
+
+        // Global functions
+        window.deployContract = function(type, data) {
+            window.app.deployContract(type, data);
+        };
+
+        window.deployTokenContract = function() {
+            window.app.deployTokenContract();
+        };
+
+        window.deployOrderBookContract = function() {
+            window.app.deployOrderBookContract();
+        };
+
+        window.deployNFTContract = function() {
+            window.app.deployNFTContract();
+        };
+
+        window.deployVotingContract = function() {
+            window.app.deployVotingContract();
+        };
+
+        window.refreshContracts = function() {
+            window.app.refreshContracts();
+        };
+
+        // Initialize app
+        const app = new SmartContractsDemo();
+        window.app = app; // Make globally accessible
+        app.init();
+    </script>
+</body>
+</html>

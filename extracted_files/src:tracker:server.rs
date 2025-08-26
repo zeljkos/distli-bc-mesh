@@ -252,19 +252,19 @@ async fn handle_cross_network_trade(
             })
         };
         
-        // FIXED: Only broadcast to buyer network to avoid duplicate trade executions
-        // The buyer network will create the single authoritative trade execution record
-        println!("Broadcasting trade execution only to buyer network: {}", buyer_net);
-        broadcast_to_network(&networks, buyer_net, "enterprise", trade_execution).await;
+        // Broadcast to both networks
+        broadcast_to_network(&networks, buyer_net, "enterprise", trade_execution.clone()).await;
+        if buyer_net != seller_net {
+            broadcast_to_network(&networks, seller_net, "enterprise", trade_execution).await;
+        }
         
-        println!("Trade execution broadcast to buyer network: {}", buyer_net);
+        println!("Trade execution broadcast to both networks");
         
         Ok(warp::reply::json(&serde_json::json!({
             "status": "success",
-            "message": "Cross-network trade broadcast to buyer network (authoritative record)",
+            "message": "Cross-network trade broadcast to both networks",
             "buyer_network": buyer_net,
-            "seller_network": seller_net,
-            "note": "Only buyer network creates trade execution to avoid duplicates"
+            "seller_network": seller_net
         })))
     } else {
         println!("Invalid cross-network trade notification - missing network IDs");

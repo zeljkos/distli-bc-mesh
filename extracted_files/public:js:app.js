@@ -14,7 +14,6 @@ class DistliApp {
         this.userId = 'user_' + Math.random().toString(36).substr(2, 9);
         this.recentBlocks = [];
 		this.remoteOrders = { bids: [], asks: [] };
-        this.processedTrades = new Set(); // Track processed trade executions to prevent duplicates
         this.rtcConfig = {
             iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
         };
@@ -416,16 +415,6 @@ class DistliApp {
     handleTradeExecution(trade) {
 		console.log('=== TRADE EXECUTION RECEIVED ===');
 		console.log('Trade ID:', trade.trade_id);
-		
-		// Check if we've already processed this trade execution
-		if (this.processedTrades.has(trade.trade_id)) {
-			console.log('SKIPPING duplicate trade execution:', trade.trade_id);
-			return;
-		}
-		
-		// Mark this trade as processed
-		this.processedTrades.add(trade.trade_id);
-		console.log('Processing new trade execution:', trade.trade_id);
 		console.log('Asset:', trade.asset);
 		console.log('Quantity:', trade.quantity);
 		console.log('Price:', trade.price);

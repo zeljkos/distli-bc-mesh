@@ -1,0 +1,73 @@
+[package]
+name = "distli-mesh-bc"
+version = "0.3.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "tracker"
+path = "src/tracker/main.rs"
+
+[[bin]]
+name = "enterprise-validator"
+path = "src/enterprise_bc/validator_main.rs"
+
+[[bin]]
+name = "enterprise-dashboard"
+path = "src/enterprise_bc/dashboard_main.rs"
+
+[dependencies]
+# Core blockchain
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sha2 = "0.10"
+hex = "0.4"
+
+# Server dependencies (native only)
+tokio = { version = "1.0", features = ["full"], optional = true }
+warp = { version = "0.3", optional = true }
+uuid = { version = "1.0", features = ["v4"], optional = true }
+futures-util = { version = "0.3", optional = true }
+tokio-stream = { version = "0.1", optional = true }
+reqwest = { version = "0.11", features = ["json"], optional = true }
+tracing = { version = "0.1", optional = true }
+tracing-subscriber = { version = "0.3", optional = true }
+clap = { version = "4.0", features = ["derive"], optional = true }
+
+# WASM dependencies
+wasm-bindgen = { version = "0.2", features = ["serde-serialize"], optional = true }
+js-sys = { version = "0.3", optional = true }
+console_error_panic_hook = { version = "0.1", optional = true }
+web-sys = { version = "0.3", features = [
+    "console",
+    "Window", 
+    "Document",
+    "Element",
+    "HtmlElement", 
+    "WebSocket",
+    "MessageEvent",
+    "ErrorEvent",
+    "CloseEvent"
+], optional = true }
+
+[features]
+default = ["native"]
+native = [
+    "tokio",
+    "warp", 
+    "uuid",
+    "futures-util",
+    "tokio-stream",
+    "reqwest",
+    "tracing",
+    "tracing-subscriber",
+    "clap"
+]
+wasm = [
+    "wasm-bindgen",
+    "js-sys",
+    "web-sys",
+    "console_error_panic_hook"
+]

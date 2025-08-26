@@ -29,8 +29,3 @@ pub use tracker::Tracker;
 pub fn main() {
     console_error_panic_hook::set_once();
 }
-
-#[cfg(feature = "wasm")]
-pub use blockchain::SmartContractExecutor;  
-
-

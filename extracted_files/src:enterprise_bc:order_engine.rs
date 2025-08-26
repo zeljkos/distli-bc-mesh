@@ -40,7 +40,7 @@ pub struct EnterpriseOrderEngine {
     pub sell_orders: Vec<OrderBookEntry>, 
     pub recent_trades: Vec<Trade>,
     pub processed_transactions: HashSet<String>, // Track processed transaction IDs
-    pub processed_trades: HashSet<String>, // Track processed trade IDs to prevent duplicates
+
 }
 
 impl EnterpriseOrderEngine {
@@ -50,7 +50,6 @@ impl EnterpriseOrderEngine {
             sell_orders: Vec::new(),
             recent_trades: Vec::new(),
             processed_transactions: HashSet::new(),
-            processed_trades: HashSet::new(),
         }
     }
 
@@ -140,12 +139,10 @@ impl EnterpriseOrderEngine {
                 let trade_price = opposite_order.price; // Maker's price wins
                 
                 let trade = Trade {
-                    trade_id: format!("trade_{}_{}_{}_{}", 
-                        remaining_order.order_id,
-                        opposite_order.order_id,
-                        trade_quantity,
-                        trade_price as u64
-                    ),
+                    trade_id: format!("trade_{}", std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs()),
                     asset: remaining_order.asset.clone(),
                     quantity: trade_quantity,
                     price: trade_price,
@@ -171,19 +168,10 @@ impl EnterpriseOrderEngine {
                         .as_secs(),
                 };
                 
-                // Check if this trade has already been processed
-                if self.processed_trades.contains(&trade.trade_id) {
-                    println!("Skipping duplicate trade: {}", trade.trade_id);
-                    i += 1;
-                    continue;
-                }
-                
                 println!("TRADE EXECUTED: {} {} {} @ {} between networks {} and {}", 
                          trade.trade_id, trade.quantity, trade.asset, trade.price,
                          trade.buyer_network, trade.seller_network);
                 
-                // Mark trade as processed
-                self.processed_trades.insert(trade.trade_id.clone());
                 trades.push(trade);
                 
                 // Update quantities
