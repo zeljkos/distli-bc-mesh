@@ -18,6 +18,10 @@ class DistliApp {
         this.rtcConfig = {
             iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
         };
+        
+        // GSM Roaming wallet system
+        this.wallets = new Map();
+        this.initializeWallets();
     }
 
     async init() {
@@ -31,7 +35,11 @@ class DistliApp {
             this.setupDefaultServer();
             this.updateUI();
             
-            setInterval(() => this.updateUI(), 2000);
+            setInterval(() => {
+                this.updateUI();
+                this.updateActiveSessionsDisplay(); // Update GSM roaming sessions display
+                this.updateWalletDisplay(); // Update wallet balances
+            }, 2000);
             
             console.log('App initialized');
         } catch (error) {
@@ -64,6 +72,20 @@ class DistliApp {
         document.querySelector('.btn-sell')?.addEventListener('click', () => this.placeSellOrder());
         document.querySelector('.refresh-btn')?.addEventListener('click', () => this.updateOrderBook());
 
+        // GSM Roaming event listeners
+        document.getElementById('deploy-roaming-contract-btn')?.addEventListener('click', () => this.deployRoamingContract());
+        document.getElementById('set-rate-btn')?.addEventListener('click', () => this.setRoamingRate());
+        document.getElementById('connect-roaming-btn')?.addEventListener('click', () => this.connectRoaming());
+        document.getElementById('disconnect-roaming-btn')?.addEventListener('click', () => this.disconnectRoaming());
+        document.getElementById('manual-billing-btn')?.addEventListener('click', () => this.processMinuteBilling());
+        document.getElementById('refresh-billing-btn')?.addEventListener('click', () => this.refreshBillingHistory());
+        document.getElementById('toggle-auto-billing-btn')?.addEventListener('click', () => this.toggleAutoBilling());
+        
+        // Wallet management event listeners
+        document.getElementById('manual-transfer-btn')?.addEventListener('click', () => this.manualTransfer());
+        document.getElementById('add-funds-btn')?.addEventListener('click', () => this.addFunds());
+        document.getElementById('update-billing-settings-btn')?.addEventListener('click', () => this.updateBillingSettings());
+
         document.querySelectorAll('.tab').forEach(tab => {
             tab.addEventListener('click', (e) => this.showTab(this.getTabName(e.target.textContent)));
         });
@@ -82,6 +104,7 @@ class DistliApp {
         if (text.includes('Order')) return 'orderbook';
         if (text.includes('Smart')) return 'contracts';
         if (text.includes('Contract')) return 'editor';
+        if (text.includes('GSM') || text.includes('Roaming')) return 'roaming';
         return 'messaging';
     }
 
@@ -1097,6 +1120,492 @@ updateTable(tableId, localOrders, type) {
         });
         
         this.updateUI();
+    }
+
+    // Wallet Management
+    initializeWallets() {
+        // Initialize default wallets with starting balances
+        this.wallets.set('wallet_vodafone', { 
+            balance: 1000, 
+            network: 'Vodafone',
+            transactions: []
+        });
+        this.wallets.set('wallet_tmobile', { 
+            balance: 0, 
+            network: 'T-Mobile',
+            transactions: []
+        });
+        this.wallets.set('wallet_orange', { 
+            balance: 800, 
+            network: 'Orange',
+            transactions: []
+        });
+        this.wallets.set('wallet_verizon', { 
+            balance: 0, 
+            network: 'Verizon',
+            transactions: []
+        });
+    }
+
+    getWalletBalance(walletId) {
+        const wallet = this.wallets.get(walletId);
+        return wallet ? wallet.balance : 0;
+    }
+
+    transferFunds(fromWallet, toWallet, amount, description = '') {
+        const from = this.wallets.get(fromWallet);
+        const to = this.wallets.get(toWallet);
+
+        if (!from || !to) {
+            console.error('Invalid wallet addresses');
+            return false;
+        }
+
+        if (from.balance < amount) {
+            console.error(`Insufficient funds: ${from.balance} < ${amount}`);
+            this.logRoamingEvent(`❌ Transfer failed: Insufficient funds in ${fromWallet}`, 'error');
+            return false;
+        }
+
+        // Execute transfer
+        from.balance -= amount;
+        to.balance += amount;
+
+        // Log transaction
+        const transaction = {
+            timestamp: Date.now(),
+            from: fromWallet,
+            to: toWallet,
+            amount,
+            description,
+            id: `tx_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`
+        };
+
+        from.transactions.push({...transaction, type: 'debit'});
+        to.transactions.push({...transaction, type: 'credit'});
+
+        console.log(`💸 Transfer: ${fromWallet} → ${toWallet}: ${amount} units`);
+        this.logRoamingEvent(`💸 ${description || 'Transfer'}: ${amount} units (${fromWallet} → ${toWallet})`, 'success');
+        
+        this.updateWalletDisplay();
+        return true;
+    }
+
+    updateWalletDisplay() {
+        // Update wallet display in GSM Roaming tab
+        const walletContainer = document.getElementById('wallet-status');
+        if (!walletContainer) return;
+
+        const walletsHtml = Array.from(this.wallets.entries()).map(([id, wallet]) => {
+            const recentTx = wallet.transactions.slice(-3).reverse();
+            const txHtml = recentTx.map(tx => {
+                const sign = tx.type === 'credit' ? '+' : '-';
+                const color = tx.type === 'credit' ? '#28a745' : '#dc3545';
+                return `<div style="color: ${color}; font-size: 12px;">${sign}${tx.amount} - ${tx.description}</div>`;
+            }).join('');
+
+            return `
+                <div class="wallet-card">
+                    <h4>💼 ${id}</h4>
+                    <div class="wallet-info">
+                        <div><strong>Network:</strong> ${wallet.network}</div>
+                        <div><strong>Balance:</strong> ${wallet.balance} units</div>
+                        <div><strong>Transactions:</strong> ${wallet.transactions.length}</div>
+                    </div>
+                    ${txHtml ? `<div class="recent-tx">${txHtml}</div>` : ''}
+                </div>
+            `;
+        }).join('');
+
+        walletContainer.innerHTML = walletsHtml;
+    }
+
+    // GSM Roaming Methods
+    deployRoamingContract() {
+        try {
+            console.log('🚀 Deploying GSM Roaming Smart Contract...');
+            this.logRoamingEvent('Deploying GSM Roaming Contract...', 'success');
+            
+            // In a real implementation, this would deploy the contract via the blockchain
+            setTimeout(() => {
+                this.logRoamingEvent('GSM Roaming Contract deployed successfully!', 'success');
+            }, 1000);
+        } catch (error) {
+            console.error('Error deploying roaming contract:', error);
+            this.logRoamingEvent('Failed to deploy roaming contract', 'error');
+        }
+    }
+
+    setRoamingRate() {
+        try {
+            const homeNetwork = document.getElementById('home-network')?.value;
+            const visitingNetwork = document.getElementById('visiting-network')?.value;
+            const rate = document.getElementById('roaming-rate')?.value;
+
+            if (!homeNetwork || !visitingNetwork || !rate) {
+                alert('Please fill in all network rate fields');
+                return;
+            }
+
+            console.log(`💰 Setting rate: ${homeNetwork} -> ${visitingNetwork} = ${rate} units/min`);
+            this.logRoamingEvent(`Rate set: ${homeNetwork} → ${visitingNetwork} at ${rate} units/minute`, 'success');
+            
+        } catch (error) {
+            console.error('Error setting roaming rate:', error);
+            this.logRoamingEvent('Failed to set roaming rate', 'error');
+        }
+    }
+
+    connectRoaming() {
+        try {
+            const imsi = document.getElementById('device-imsi')?.value;
+            const phoneNumber = document.getElementById('phone-number')?.value || '+1-555-0000';
+            const homeNetwork = document.getElementById('home-network')?.value;
+            const visitingNetwork = document.getElementById('visiting-network')?.value;
+
+            if (!imsi || !homeNetwork || !visitingNetwork) {
+                alert('Please fill in IMSI and network fields');
+                return;
+            }
+
+            // Check if actually roaming (different networks)
+            const isRoaming = homeNetwork !== visitingNetwork;
+            if (!isRoaming) {
+                this.logRoamingEvent(`📱 Connected to home network ${homeNetwork} - No roaming charges`, 'success');
+                return;
+            }
+
+            console.log(`📡 Roaming: ${phoneNumber} (${imsi}) from ${homeNetwork} → ${visitingNetwork}`);
+            
+            // Get billing rate from either roaming-rate field or billing-units field
+            const roamingRate = parseInt(document.getElementById('roaming-rate')?.value || '15');
+            const billingUnits = parseInt(document.getElementById('billing-units')?.value || roamingRate.toString());
+            
+            // Create session - representing the roaming agreement activation
+            const sessionId = `${imsi}_${Date.now()}`;
+            const session = {
+                sessionId,
+                imsi,
+                phoneNumber,
+                homeNetwork,
+                visitingNetwork,
+                roamingAgreement: `${homeNetwork}-${visitingNetwork}`,
+                startTime: Date.now(),
+                minutesBilled: 0,
+                totalCost: 0,
+                rate: billingUnits,
+                status: 'ROAMING_ACTIVE'
+            };
+
+            // Store session (in real implementation, this would be in blockchain)
+            if (!this.roamingSessions) this.roamingSessions = new Map();
+            this.roamingSessions.set(sessionId, session);
+            this.currentRoamingSession = sessionId;
+
+            // Update UI
+            this.updateActiveSessionsDisplay();
+            this.logRoamingEvent(`🌍 ROAMING ACTIVATED: ${phoneNumber} (${homeNetwork} → ${visitingNetwork}) - Agreement: ${homeNetwork}-${visitingNetwork}`, 'success');
+            this.logRoamingEvent(`💰 Billing Rate: ${billingUnits} units per interval - Based on inter-operator agreement`, 'warning');
+            
+            // Enable buttons
+            document.getElementById('disconnect-roaming-btn').disabled = false;
+            document.getElementById('manual-billing-btn').disabled = false;
+            document.getElementById('connect-roaming-btn').disabled = true;
+
+        } catch (error) {
+            console.error('Error connecting to roaming network:', error);
+            this.logRoamingEvent('Failed to connect to roaming network', 'error');
+        }
+    }
+
+    disconnectRoaming() {
+        try {
+            if (!this.currentRoamingSession) {
+                alert('No active roaming session');
+                return;
+            }
+
+            const session = this.roamingSessions.get(this.currentRoamingSession);
+            if (!session) return;
+
+            // Calculate final cost
+            const durationMinutes = Math.max(1, Math.floor((Date.now() - session.startTime) / 60000));
+            const finalCost = durationMinutes * session.rate;
+
+            console.log(`📴 Disconnecting session ${this.currentRoamingSession}`);
+            this.logRoamingEvent(`📴 Session ended. Duration: ${durationMinutes}min, Cost: ${finalCost} units`, 'warning');
+
+            // Remove from active sessions
+            this.roamingSessions.delete(this.currentRoamingSession);
+            this.currentRoamingSession = null;
+
+            // Update UI
+            this.updateActiveSessionsDisplay();
+            
+            // Reset buttons
+            document.getElementById('disconnect-roaming-btn').disabled = true;
+            document.getElementById('manual-billing-btn').disabled = true;
+            document.getElementById('connect-roaming-btn').disabled = false;
+
+        } catch (error) {
+            console.error('Error disconnecting from roaming network:', error);
+            this.logRoamingEvent('Failed to disconnect from roaming network', 'error');
+        }
+    }
+
+    processMinuteBilling() {
+        try {
+            if (!this.currentRoamingSession) {
+                alert('No active roaming session');
+                return;
+            }
+
+            const session = this.roamingSessions.get(this.currentRoamingSession);
+            if (!session) return;
+
+            const guestWallet = document.getElementById('guest-wallet')?.value || 'wallet_vodafone';
+            const hostWallet = document.getElementById('host-wallet')?.value || 'wallet_tmobile';
+
+            // Attempt to transfer funds based on roaming agreement
+            const transferSuccess = this.transferFunds(
+                guestWallet, 
+                hostWallet, 
+                session.rate, 
+                `Roaming Agreement ${session.roamingAgreement} - Interval ${session.minutesBilled + 1}`
+            );
+
+            if (!transferSuccess) {
+                this.logRoamingEvent('⚠️ Billing failed: Insufficient funds - session suspended', 'error');
+                return;
+            }
+
+            session.minutesBilled += 1;
+            session.totalCost += session.rate;
+
+            console.log(`💳 Billing minute ${session.minutesBilled}: ${session.rate} units`);
+            this.logRoamingEvent(`💳 Minute ${session.minutesBilled} billed: ${session.rate} units (Total: ${session.totalCost})`, 'warning');
+
+            // Update session in map
+            this.roamingSessions.set(this.currentRoamingSession, session);
+            this.updateActiveSessionsDisplay();
+
+        } catch (error) {
+            console.error('Error processing minute billing:', error);
+            this.logRoamingEvent('Failed to process minute billing', 'error');
+        }
+    }
+
+    refreshBillingHistory() {
+        try {
+            console.log('🔄 Refreshing billing history...');
+            this.logRoamingEvent('Billing history refreshed', 'success');
+            // In real implementation, this would fetch from blockchain
+        } catch (error) {
+            console.error('Error refreshing billing history:', error);
+        }
+    }
+
+    toggleAutoBilling() {
+        try {
+            const button = document.getElementById('toggle-auto-billing-btn');
+            const statusSpan = document.getElementById('billing-status');
+            const intervalSpan = document.getElementById('current-interval');
+            const rateSpan = document.getElementById('current-rate');
+            
+            // Get custom interval and units
+            const intervalSeconds = parseInt(document.getElementById('billing-interval')?.value || '60');
+            const billingUnits = parseInt(document.getElementById('billing-units')?.value || '15');
+
+            if (!this.autoBillingInterval) {
+                // Update rate for current session if exists
+                if (this.currentRoamingSession && this.roamingSessions) {
+                    const session = this.roamingSessions.get(this.currentRoamingSession);
+                    if (session) {
+                        session.rate = billingUnits;
+                        this.roamingSessions.set(this.currentRoamingSession, session);
+                    }
+                }
+
+                // Start auto billing with custom interval
+                this.autoBillingInterval = setInterval(() => {
+                    if (this.currentRoamingSession) {
+                        this.processMinuteBilling();
+                    }
+                }, intervalSeconds * 1000); // Convert seconds to milliseconds
+
+                // Store settings for display
+                this.billingIntervalSeconds = intervalSeconds;
+                this.billingUnitsAmount = billingUnits;
+
+                button.textContent = '⏸️ Stop Auto Billing';
+                statusSpan.textContent = 'Enabled';
+                statusSpan.style.color = '#28a745';
+                intervalSpan.textContent = intervalSeconds;
+                rateSpan.textContent = billingUnits;
+                
+                this.logRoamingEvent(`⏰ Automatic billing started (every ${intervalSeconds} seconds, ${billingUnits} units per interval)`, 'success');
+            } else {
+                // Stop auto billing
+                clearInterval(this.autoBillingInterval);
+                this.autoBillingInterval = null;
+
+                button.textContent = '▶️ Start Auto Billing';
+                statusSpan.textContent = 'Disabled';
+                statusSpan.style.color = '#dc3545';
+                this.logRoamingEvent('⏸️ Automatic billing stopped', 'warning');
+            }
+        } catch (error) {
+            console.error('Error toggling auto billing:', error);
+            this.logRoamingEvent('Failed to toggle auto billing', 'error');
+        }
+    }
+
+    updateActiveSessionsDisplay() {
+        const container = document.getElementById('active-sessions');
+        if (!container) return;
+
+        if (!this.roamingSessions || this.roamingSessions.size === 0) {
+            container.innerHTML = '<div class="info-banner">No active roaming sessions</div>';
+            return;
+        }
+
+        const sessionsHtml = Array.from(this.roamingSessions.values()).map(session => {
+            const duration = Math.floor((Date.now() - session.startTime) / 1000);
+            const minutes = Math.floor(duration / 60);
+            const seconds = duration % 60;
+
+            return `
+                <div class="active-session">
+                    <h4>🌍 ROAMING: ${session.phoneNumber || session.imsi}</h4>
+                    <div class="session-details">
+                        <div class="session-detail"><strong>Status:</strong> <span style="color: #28a745">● ${session.status}</span></div>
+                        <div class="session-detail"><strong>Agreement:</strong> ${session.roamingAgreement}</div>
+                        <div class="session-detail"><strong>Duration:</strong> ${minutes}:${seconds.toString().padStart(2, '0')}</div>
+                        <div class="session-detail"><strong>Intervals Billed:</strong> ${session.minutesBilled}</div>
+                        <div class="session-detail"><strong>Rate:</strong> ${session.rate} units/interval</div>
+                        <div class="session-detail"><strong>Total Cost:</strong> ${session.totalCost} units</div>
+                        <div class="session-detail"><strong>Home Provider:</strong> ${session.homeNetwork}</div>
+                        <div class="session-detail"><strong>Visiting Network:</strong> ${session.visitingNetwork}</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        container.innerHTML = sessionsHtml;
+    }
+
+    logRoamingEvent(message, type = 'info') {
+        const container = document.getElementById('roaming-events');
+        if (!container) return;
+
+        const timestamp = new Date().toLocaleTimeString();
+        const eventDiv = document.createElement('div');
+        eventDiv.className = `roaming-event ${type}`;
+        eventDiv.innerHTML = `
+            ${message}
+            <span class="timestamp">${timestamp}</span>
+        `;
+
+        container.insertBefore(eventDiv, container.firstChild);
+
+        // Keep only last 20 events
+        while (container.children.length > 20) {
+            container.removeChild(container.lastChild);
+        }
+    }
+
+    // Manual wallet management methods
+    manualTransfer() {
+        try {
+            const fromWallet = document.getElementById('transfer-from')?.value;
+            const toWallet = document.getElementById('transfer-to')?.value;
+            const amount = parseInt(document.getElementById('transfer-amount')?.value || '0');
+
+            if (!fromWallet || !toWallet || amount <= 0) {
+                alert('Please select valid wallets and amount');
+                return;
+            }
+
+            if (fromWallet === toWallet) {
+                alert('Cannot transfer to the same wallet');
+                return;
+            }
+
+            const success = this.transferFunds(fromWallet, toWallet, amount, 'Manual transfer');
+            if (success) {
+                this.logRoamingEvent(`✅ Manual transfer completed: ${amount} units`, 'success');
+            }
+        } catch (error) {
+            console.error('Error in manual transfer:', error);
+            this.logRoamingEvent('❌ Manual transfer failed', 'error');
+        }
+    }
+
+    addFunds() {
+        try {
+            const vodafoneWallet = this.wallets.get('wallet_vodafone');
+            if (vodafoneWallet) {
+                vodafoneWallet.balance += 500;
+                vodafoneWallet.transactions.push({
+                    timestamp: Date.now(),
+                    from: 'system',
+                    to: 'wallet_vodafone',
+                    amount: 500,
+                    description: 'System fund addition',
+                    type: 'credit',
+                    id: `sys_${Date.now()}`
+                });
+                
+                this.updateWalletDisplay();
+                this.logRoamingEvent('💰 Added 500 units to wallet_vodafone', 'success');
+            }
+        } catch (error) {
+            console.error('Error adding funds:', error);
+            this.logRoamingEvent('❌ Failed to add funds', 'error');
+        }
+    }
+
+    updateBillingSettings() {
+        try {
+            const intervalSeconds = parseInt(document.getElementById('billing-interval')?.value || '60');
+            const billingUnits = parseInt(document.getElementById('billing-units')?.value || '15');
+            
+            // Update current session if exists
+            if (this.currentRoamingSession && this.roamingSessions) {
+                const session = this.roamingSessions.get(this.currentRoamingSession);
+                if (session) {
+                    session.rate = billingUnits;
+                    this.roamingSessions.set(this.currentRoamingSession, session);
+                    this.updateActiveSessionsDisplay();
+                }
+            }
+
+            // If auto-billing is active, restart with new interval
+            if (this.autoBillingInterval) {
+                clearInterval(this.autoBillingInterval);
+                
+                this.autoBillingInterval = setInterval(() => {
+                    if (this.currentRoamingSession) {
+                        this.processMinuteBilling();
+                    }
+                }, intervalSeconds * 1000);
+
+                // Update display
+                document.getElementById('current-interval').textContent = intervalSeconds;
+                document.getElementById('current-rate').textContent = billingUnits;
+                
+                this.logRoamingEvent(`⚙️ Billing settings updated: ${intervalSeconds}s interval, ${billingUnits} units/interval`, 'success');
+            } else {
+                // Just update the display for next time
+                document.getElementById('current-interval').textContent = intervalSeconds;
+                document.getElementById('current-rate').textContent = billingUnits;
+                this.logRoamingEvent(`⚙️ Settings saved for next billing session: ${intervalSeconds}s, ${billingUnits} units`, 'success');
+            }
+
+        } catch (error) {
+            console.error('Error updating billing settings:', error);
+            this.logRoamingEvent('❌ Failed to update billing settings', 'error');
+        }
     }
 }
 

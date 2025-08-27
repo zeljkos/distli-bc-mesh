@@ -1,0 +1,54 @@
+{
+  "chain": [
+    {
+      "hash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "height": 0,
+      "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "stake_weight": 0,
+      "timestamp": 1756229018,
+      "transactions": [],
+      "validator": "genesis"
+    }
+  ],
+  "contracts": {},
+  "pending": [],
+  "tenant_blocks": [
+    {
+      "block_hash": "ec524f214a8286236c842d11b8e17b95a109c51cf0bd9b80b95d602fb2f0be15",
+      "block_id": 1,
+      "network_id": "tokyo",
+      "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "timestamp": 1756229760,
+      "transactions": [
+        "{\"id\":\"msg_1756229760\",\"from\":\"user_upbiq4avm\",\"to\":\"broadcast\",\"amount\":0,\"tx_type\":{\"Message\":{\"content\":\"hello\"}},\"timestamp\":1756229760}"
+      ]
+    },
+    {
+      "block_hash": "06b837260a4d6c59f039da4fc0979f5066925ce22d2bdc6f868dbb69be06429c",
+      "block_id": 1,
+      "network_id": "nyc",
+      "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "timestamp": 1756229770,
+      "transactions": [
+        "{\"id\":\"msg_1756229770\",\"from\":\"user_kw9woxcnk\",\"to\":\"broadcast\",\"amount\":0,\"tx_type\":{\"Message\":{\"content\":\"hello from nyc\"}},\"timestamp\":1756229770}"
+      ]
+    },
+    {
+      "block_hash": "8b029b4178110423794bd92dee1dce5d8d9b4631f35ede018282a893353ba2c7",
+      "block_id": 1,
+      "network_id": "london",
+      "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "timestamp": 1756229781,
+      "transactions": [
+        "{\"id\":\"msg_1756229781\",\"from\":\"user_heuckmkz7\",\"to\":\"broadcast\",\"amount\":0,\"tx_type\":{\"Message\":{\"content\":\"hello from london\"}},\"timestamp\":1756229781}"
+      ]
+    }
+  ],
+  "validators": {
+    "validator1": {
+      "active": true,
+      "address": "validator1",
+      "stake": 1000
+    }
+  }
+}

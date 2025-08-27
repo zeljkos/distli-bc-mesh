@@ -1,0 +1,18 @@
+{
+  "blocks": [
+    {
+      "block_hash": "ec524f214a8286236c842d11b8e17b95a109c51cf0bd9b80b95d602fb2f0be15",
+      "block_id": 1,
+      "network_id": "tokyo",
+      "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "timestamp": 1756229760,
+      "transactions": [
+        "{\"id\":\"msg_1756229760\",\"from\":\"user_upbiq4avm\",\"to\":\"broadcast\",\"amount\":0,\"tx_type\":{\"Message\":{\"content\":\"hello\"}},\"timestamp\":1756229760}"
+      ]
+    }
+  ],
+  "last_updated": 1756229760,
+  "network_id": "tokyo",
+  "total_blocks": 1,
+  "total_transactions": 1
+}

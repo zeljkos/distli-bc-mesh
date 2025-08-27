@@ -1,0 +1,18 @@
+{
+  "blocks": [
+    {
+      "block_hash": "06b837260a4d6c59f039da4fc0979f5066925ce22d2bdc6f868dbb69be06429c",
+      "block_id": 1,
+      "network_id": "nyc",
+      "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "timestamp": 1756229770,
+      "transactions": [
+        "{\"id\":\"msg_1756229770\",\"from\":\"user_kw9woxcnk\",\"to\":\"broadcast\",\"amount\":0,\"tx_type\":{\"Message\":{\"content\":\"hello from nyc\"}},\"timestamp\":1756229770}"
+      ]
+    }
+  ],
+  "last_updated": 1756229770,
+  "network_id": "nyc",
+  "total_blocks": 1,
+  "total_transactions": 1
+}

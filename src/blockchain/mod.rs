@@ -53,6 +53,25 @@ pub enum TransactionType {
         seller: String,
         trade_id: Option<String>,
     },
+    RoamingConnect {
+        imsi: String,
+        home_network: String,
+        visiting_network: String,
+        antenna_id: String,
+        rate_per_minute: u64,
+    },
+    RoamingDisconnect {
+        imsi: String,
+        session_id: String,
+        duration_minutes: u64,
+        total_cost: u64,
+    },
+    RoamingBilling {
+        imsi: String,
+        session_id: String,
+        amount: u64,
+        minute_number: u64,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

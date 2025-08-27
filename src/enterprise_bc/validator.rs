@@ -17,11 +17,17 @@ pub struct Validator {
 
 impl Validator {
     pub async fn new(id: String, port: u16, initial_stake: u64) -> Self {
-        let storage_path = format!("enterprise_blockchain_{}.json", id);
+        // Ensure data directory exists
+        let _ = std::fs::create_dir_all("data");
+        
+        let storage_path = format!("data/enterprise_blockchain_{}.json", id);
         println!("Enterprise blockchain will be saved to: {}", storage_path);
         
         let mut blockchain = Blockchain::new_with_storage(storage_path);
         blockchain.add_validator(id.clone(), initial_stake as u32);
+        
+        // Force initial save to create the file
+        blockchain.save_to_disk();
         
         let tracker_url = std::env::var("TRACKER_URL").ok();
         if let Some(ref url) = tracker_url {

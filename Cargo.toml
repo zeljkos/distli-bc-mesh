@@ -1,6 +1,6 @@
 [package]
 name = "distli-mesh-bc"
-version = "0.3.0"
+version = "7.1.0"
 edition = "2021"
 
 [lib]
@@ -17,6 +17,10 @@ path = "src/enterprise_bc/validator_main.rs"
 [[bin]]
 name = "enterprise-dashboard"
 path = "src/enterprise_bc/dashboard_main.rs"
+
+[[example]]
+name = "gsm_roaming_test"
+path = "examples/gsm_roaming_test.rs"
 
 [dependencies]
 # Core blockchain

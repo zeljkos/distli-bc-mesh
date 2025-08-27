@@ -77,6 +77,7 @@
             <button class="tab"">Order Book</button>
             <button class="tab">Smart Contracts</button>
             <button class="tab">Contract Editor</button>
+            <button class="tab">GSM Roaming</button>
         </div>
 
         <!-- Tab Content Container -->
@@ -255,6 +256,163 @@
                         <strong>Contract Deployment:</strong> Contract compilation and deployment creates blockchain transactions
                     </div>
                     <div id="blockchain-editor">Loading blockchain data...</div>
+                </div>
+            </div>
+
+            <!-- GSM Roaming Tab -->
+            <div id="roaming" class="tab-panel">
+                <h2>📱 GSM Roaming System</h2>
+                
+                <!-- Network Setup Section -->
+                <div class="roaming-section">
+                    <h3>🤝 Roaming Agreements Configuration</h3>
+                    <div class="info-banner" style="background: #f0f8ff; border-left-color: #007bff;">
+                        <strong>ℹ️ How GSM Roaming Works:</strong><br>
+                        When you travel abroad, your phone connects to a local network. Your home provider has agreements with foreign networks 
+                        that define the billing rates. You move freely between cell towers - billing is based on the provider agreement, not individual antennas.
+                    </div>
+                    <div class="roaming-controls">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Home Provider:</label>
+                                <input type="text" id="home-network" class="form-control" placeholder="e.g., Vodafone" value="Vodafone">
+                            </div>
+                            <div class="form-group">
+                                <label>Visiting Provider:</label>
+                                <input type="text" id="visiting-network" class="form-control" placeholder="e.g., T-Mobile" value="T-Mobile">
+                            </div>
+                            <div class="form-group">
+                                <label>Agreement Rate:</label>
+                                <input type="number" id="roaming-rate" class="form-control" placeholder="15" value="15" min="1">
+                            </div>
+                        </div>
+                        <button id="deploy-roaming-contract-btn" class="btn btn-primary">🚀 Deploy Roaming Contract</button>
+                        <button id="set-rate-btn" class="btn btn-secondary">📝 Update Agreement</button>
+                    </div>
+                    <div id="agreements-list" style="margin-top: 15px;">
+                        <h4>📋 Active Roaming Agreements:</h4>
+                        <div class="info-banner">
+                            • Vodafone ↔ T-Mobile: 15 units/interval<br>
+                            • T-Mobile ↔ Vodafone: 12 units/interval<br>
+                            • Orange ↔ Verizon: 20 units/interval<br>
+                            • Verizon ↔ Orange: 18 units/interval
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Connection Section -->
+                <div class="roaming-section">
+                    <h3>📞 Device Connection</h3>
+                    <div class="roaming-controls">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>IMSI (SIM Card ID):</label>
+                                <input type="text" id="device-imsi" class="form-control" placeholder="310410123456789" value="310410123456789">
+                            </div>
+                            <div class="form-group">
+                                <label>Phone Number:</label>
+                                <input type="text" id="phone-number" class="form-control" placeholder="+1-555-0123" value="+1-555-0123">
+                            </div>
+                            <div class="form-group">
+                                <label>Guest Provider Wallet:</label>
+                                <input type="text" id="guest-wallet" class="form-control" placeholder="wallet_vodafone" value="wallet_vodafone">
+                            </div>
+                            <div class="form-group">
+                                <label>Host Provider Wallet:</label>
+                                <input type="text" id="host-wallet" class="form-control" placeholder="wallet_tmobile" value="wallet_tmobile">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <button id="connect-roaming-btn" class="btn btn-success">📡 Connect to Network</button>
+                            <button id="disconnect-roaming-btn" class="btn btn-danger" disabled>📴 Disconnect</button>
+                            <button id="manual-billing-btn" class="btn btn-warning" disabled>💳 Process Minute Billing</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Wallet Status Section -->
+                <div class="roaming-section">
+                    <h3>💼 Wallet Status</h3>
+                    <div class="roaming-controls">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>From Wallet:</label>
+                                <select id="transfer-from" class="form-control">
+                                    <option value="wallet_vodafone">wallet_vodafone</option>
+                                    <option value="wallet_tmobile">wallet_tmobile</option>
+                                    <option value="wallet_orange">wallet_orange</option>
+                                    <option value="wallet_verizon">wallet_verizon</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>To Wallet:</label>
+                                <select id="transfer-to" class="form-control">
+                                    <option value="wallet_tmobile">wallet_tmobile</option>
+                                    <option value="wallet_vodafone">wallet_vodafone</option>
+                                    <option value="wallet_orange">wallet_orange</option>
+                                    <option value="wallet_verizon">wallet_verizon</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Amount:</label>
+                                <input type="number" id="transfer-amount" class="form-control" placeholder="100" value="100" min="1">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <button id="manual-transfer-btn" class="btn btn-secondary">💸 Manual Transfer</button>
+                            <button id="add-funds-btn" class="btn btn-success">💰 Add 500 Units to Vodafone</button>
+                        </div>
+                    </div>
+                    <div id="wallet-status">
+                        <div class="info-banner">Loading wallet information...</div>
+                    </div>
+                </div>
+
+                <!-- Active Sessions Section -->
+                <div class="roaming-section">
+                    <h3>📋 Active Sessions</h3>
+                    <div id="active-sessions">
+                        <div class="info-banner">No active roaming sessions</div>
+                    </div>
+                </div>
+
+                <!-- Billing History Section -->
+                <div class="roaming-section">
+                    <h3>💰 Billing History</h3>
+                    <div class="roaming-controls">
+                        <button id="refresh-billing-btn" class="btn btn-secondary">🔄 Refresh History</button>
+                    </div>
+                    <div id="billing-history">
+                        <div class="info-banner">No billing records</div>
+                    </div>
+                </div>
+
+                <!-- Auto-billing Status -->
+                <div class="roaming-section">
+                    <h3>⏰ Automated Billing</h3>
+                    <div class="roaming-controls">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Billing Interval (seconds):</label>
+                                <input type="number" id="billing-interval" class="form-control" placeholder="60" value="60" min="1" max="600">
+                            </div>
+                            <div class="form-group">
+                                <label>Units per Interval:</label>
+                                <input type="number" id="billing-units" class="form-control" placeholder="15" value="15" min="1">
+                            </div>
+                        </div>
+                        <div class="info-banner">Automatic billing: <span id="billing-status">Disabled</span> | Interval: <span id="current-interval">60</span>s | Rate: <span id="current-rate">15</span> units</div>
+                        <div class="form-row">
+                            <button id="toggle-auto-billing-btn" class="btn btn-primary">▶️ Start Auto Billing</button>
+                            <button id="update-billing-settings-btn" class="btn btn-secondary">⚙️ Update Settings</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Roaming Events Log -->
+                <div class="roaming-section">
+                    <h3>📊 Roaming Events</h3>
+                    <div id="roaming-events" class="events-log"></div>
                 </div>
             </div>
         </div>

@@ -1,4 +1,4 @@
-[200~Technical Roadmap for Distributed Mesh Blockchain
+Technical Roadmap for Distributed Mesh Blockchain
 Phase 1: Security & Stability (Current Priority)
 1.1 Cryptographic Security
 

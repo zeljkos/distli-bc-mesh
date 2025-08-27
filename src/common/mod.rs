@@ -20,7 +20,8 @@ pub use contracts::{
     ContractResult, 
     ContractEvent, 
     ContractVM,
-    create_trading_contract
+    create_trading_contract,
+    create_gsm_roaming_contract
 };
 
 // Re-export blockchain types with contract support
