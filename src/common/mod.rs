@@ -5,7 +5,7 @@ pub mod crypto;
 pub mod time;
 pub mod api_utils;
 pub mod contracts; // Add contracts module
-                   //
+pub mod private_contracts; // Private contracts with ZK proofs
  // // Re-export commonly used types
 pub use types::{
     Message,
@@ -22,6 +22,17 @@ pub use contracts::{
     ContractVM,
     create_trading_contract,
     create_gsm_roaming_contract
+};
+
+// Re-export private contract types
+pub use private_contracts::{
+    PrivateRoamingContract,
+    PrivateContractManager,
+    PrivateSession,
+    PrivateSettlement,
+    ContractTerms,
+    ZKProof,
+    RangeProof
 };
 
 // Re-export blockchain types with contract support

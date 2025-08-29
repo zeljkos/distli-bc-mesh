@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GSM Roaming - Private Contracts Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }
+        .container { max-width: 1400px; margin: 0 auto; }
+        .header { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); padding: 20px 30px; border-radius: 15px; margin-bottom: 20px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; }
+        .header h1 { color: #2c3e50; font-size: 28px; font-weight: 600; }
+        .operator-selector { display: flex; gap: 10px; align-items: center; }
+        .operator-btn { padding: 10px 20px; border: none; border-radius: 25px; font-weight: 600; cursor: pointer; transition: all 0.3s ease; font-size: 14px; }
+        .operator-btn.active { color: white; transform: scale(1.05); box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2); }
+        .operator-btn.tmobile { background: #e91e63; } .operator-btn.tmobile.active { background: #c2185b; }
+        .operator-btn.orange { background: #ff9800; } .operator-btn.orange.active { background: #f57c00; }
+        .operator-btn.vodafone { background: #e53935; } .operator-btn.vodafone.active { background: #c62828; }
+        .operator-btn.att { background: #1976d2; } .operator-btn.att.active { background: #1565c0; }
+        .operator-btn.validator { background: #4caf50; } .operator-btn.validator.active { background: #388e3c; }
+        .dashboard-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+        @media (max-width: 768px) { .dashboard-grid { grid-template-columns: 1fr; } }
+        .card { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border-radius: 15px; padding: 25px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1); }
+        .card h2 { color: #2c3e50; margin-bottom: 20px; font-size: 22px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+        .contract-item { background: #f8f9fa; border-radius: 10px; padding: 20px; margin-bottom: 15px; border-left: 5px solid; transition: transform 0.2s ease; }
+        .contract-item:hover { transform: translateX(5px); }
+        .contract-item.visible { border-left-color: #27ae60; background: linear-gradient(135deg, #e8f5e9 0%, #f1f8e9 100%); }
+        .contract-item.encrypted { border-left-color: #e74c3c; background: linear-gradient(135deg, #ffebee 0%, #fce4ec 100%); }
+        .contract-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .contract-id { font-family: 'Courier New', monospace; font-size: 12px; color: #666; background: rgba(0, 0, 0, 0.05); padding: 4px 8px; border-radius: 4px; }
+        .access-badge { padding: 4px 12px; border-radius: 15px; font-size: 12px; font-weight: 600; color: white; }
+        .access-badge.can-decrypt { background: #27ae60; }
+        .access-badge.encrypted { background: #e74c3c; }
+        .contract-details { margin-top: 15px; }
+        .detail-row { display: flex; justify-content: space-between; margin-bottom: 8px; padding: 8px 0; border-bottom: 1px solid rgba(0, 0, 0, 0.05); }
+        .detail-label { color: #666; font-weight: 500; }
+        .detail-value { color: #2c3e50; font-weight: 600; }
+        .encrypted-value { color: #e74c3c; font-style: italic; font-family: monospace; }
+        .session-item { background: rgba(52, 152, 219, 0.1); border-radius: 8px; padding: 15px; margin-bottom: 10px; border-left: 3px solid #3498db; }
+        .zk-proof-section { background: linear-gradient(135deg, #e8f4fd 0%, #f0f8ff 100%); border-radius: 10px; padding: 20px; margin-top: 15px; border: 1px solid #3498db; }
+        .zk-proof-title { color: #2980b9; font-weight: 600; margin-bottom: 15px; display: flex; align-items: center; gap: 8px; }
+        .proof-status { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+        .status-indicator { width: 12px; height: 12px; border-radius: 50%; }
+        .status-indicator.verified { background: #27ae60; box-shadow: 0 0 10px rgba(39, 174, 96, 0.5); }
+        .status-indicator.hidden { background: #f39c12; box-shadow: 0 0 10px rgba(243, 156, 18, 0.5); }
+        .settlement-summary { background: linear-gradient(135deg, #d5f4e6 0%, #e8f5e9 100%); border-radius: 10px; padding: 20px; margin-top: 20px; border: 1px solid #27ae60; }
+        .settlement-amount { font-size: 32px; font-weight: 700; color: #27ae60; text-align: center; margin-bottom: 10px; }
+        .settlement-details { text-align: center; color: #2c3e50; font-size: 14px; }
+        .operator-view-info { background: linear-gradient(135deg, #fff3cd 0%, #fefbf0 100%); border: 1px solid #ffc107; border-radius: 10px; padding: 20px; margin-bottom: 20px; }
+        .operator-view-info h3 { color: #856404; margin-bottom: 10px; }
+        .operator-view-info p { color: #856404; margin: 0; }
+        .validator-section { background: linear-gradient(135deg, #e8f5e9 0%, #f1f8e9 100%); border-radius: 15px; padding: 25px; }
+        .validation-item { background: white; border-radius: 8px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05); border-left: 4px solid #4caf50; }
+        .icon { width: 20px; height: 20px; display: inline-block; }
+        .refresh-btn { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 12px 24px; border-radius: 25px; font-weight: 600; cursor: pointer; transition: all 0.3s ease; margin-top: 20px; }
+        .refresh-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2); }
+        .connection-status { padding: 15px; margin-bottom: 20px; border-radius: 8px; border-left: 4px solid #27ae60; background: #e8f5e9; }
+        .connection-status.error { border-left-color: #e74c3c; background: #ffebee; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔐 GSM Roaming - Private Contracts with ZK Proofs</h1>
+            <div class="operator-selector">
+                <span style="color: #2c3e50; font-weight: 600; margin-right: 10px;">View as:</span>
+                <button class="operator-btn tmobile active" onclick="switchOperator('tmobile')">T-Mobile</button>
+                <button class="operator-btn orange" onclick="switchOperator('orange')">Orange</button>
+                <button class="operator-btn vodafone" onclick="switchOperator('vodafone')">Vodafone</button>
+                <button class="operator-btn att" onclick="switchOperator('att')">AT&T</button>
+                <button class="operator-btn validator" onclick="switchOperator('validator')">🔍 Validator</button>
+            </div>
+        </div>
+
+        <div class="connection-status" id="connection-status">
+            <strong>API Connection:</strong> <span id="connection-text">Testing...</span>
+        </div>
+
+        <div class="operator-view-info" id="operator-info">
+            <h3>👤 T-Mobile Dashboard</h3>
+            <p>You can see your own contract details and rates. Other operators' contracts appear encrypted.</p>
+        </div>
+
+        <div class="dashboard-grid">
+            <div class="card">
+                <h2><span class="icon">📋</span> Private Roaming Contracts</h2>
+                <div id="contracts-list">Loading contracts...</div>
+                <button class="refresh-btn" onclick="loadContracts()">🔄 Refresh Contracts</button>
+            </div>
+
+            <div class="card">
+                <h2><span class="icon">💰</span> Settlement Status</h2>
+                <div id="settlements-list">Loading settlements...</div>
+            </div>
+        </div>
+
+        <div class="card validator-section" id="validator-view" style="display: none;">
+            <h2><span class="icon">⚖️</span> Validator View - ZK Proof Verification</h2>
+            <div id="validator-content">Loading validation data...</div>
+        </div>
+    </div>
+
+    <script>
+        let currentOperator = 'tmobile';
+        const API_BASE = 'http://192.168.200.133:8080';
+        let contractsData = {};
+
+        const operatorInfo = {
+            'tmobile': { name: 'T-Mobile', description: 'You can see your own contract details and rates. Other operators\' contracts appear encrypted.', color: '#e91e63' },
+            'orange': { name: 'Orange', description: 'You can see your own contract details and rates. Other operators\' contracts appear encrypted.', color: '#ff9800' },
+            'vodafone': { name: 'Vodafone', description: 'You can see your own contract details and rates. Other operators\' contracts appear encrypted.', color: '#e53935' },
+            'att': { name: 'AT&T', description: 'You are not party to any roaming contracts. All contract details are encrypted - you can only see public settlement amounts.', color: '#1976d2' },
+            'validator': { name: 'Validator', description: 'You can verify all settlements without seeing private contract terms or subscriber data.', color: '#4caf50' }
+        };
+
+        async function testConnection() {
+            const statusEl = document.getElementById('connection-status');
+            const textEl = document.getElementById('connection-text');
+            try {
+                const response = await fetch(`${API_BASE}/health`);
+                if (response.ok) {
+                    statusEl.className = 'connection-status';
+                    textEl.textContent = 'Connected to blockchain API ✅';
+                } else {
+                    throw new Error('API not responding');
+                }
+            } catch (error) {
+                statusEl.className = 'connection-status error';
+                textEl.textContent = 'Failed to connect to API ❌ - Using demo data';
+            }
+        }
+
+        async function loadContractsFromAPI() {
+            try {
+                const response = await fetch(`${API_BASE}/api/operator-contracts?operator=${currentOperator}`);
+                if (response.ok) {
+                    const contracts = await response.json();
+                    contractsData = {};
+                    contracts.forEach(contract => {
+                        const shortId = `contract_${contract.contract_id.substring(0, 8)}`;
+                        contractsData[shortId] = {
+                            ...contract,
+                            id: contract.contract_id,
+                            participants: getParticipantsFromHash(contract.participants_hash),
+                            rate_per_minute: contract.decrypted_rate || 0,
+                            total_sessions: contract.sessions ? contract.sessions.length : 0,
+                            created_at: Date.now() - Math.random() * 172800000
+                        };
+                    });
+                    return true;
+                } else {
+                    throw new Error('API request failed');
+                }
+            } catch (error) {
+                console.warn('API not available, using demo data:', error);
+                loadSimulatedData();
+                return false;
+            }
+        }
+
+        function getParticipantsFromHash(hash) {
+            if (hash.includes('tm_orange')) return ['T-Mobile', 'Orange'];
+            if (hash.includes('tm_vodafone')) return ['T-Mobile', 'Vodafone'];
+            return ['Unknown', 'Unknown'];
+        }
+
+        function loadSimulatedData() {
+            contractsData = {
+                'contract_93e0417b': {
+                    contract_id: '93e0417b8f2d1c3e4f5a6b7c8d9e0f1a2b3c4d5e',
+                    participants: ['T-Mobile', 'Orange'], can_decrypt: currentOperator === 'tmobile' || currentOperator === 'orange',
+                    total_settlement: 12500, decrypted_rate: (currentOperator === 'tmobile' || currentOperator === 'orange') ? 15 : null,
+                    sessions: (currentOperator === 'tmobile' || currentOperator === 'orange') ? [
+                        { imsi_commitment: '6fe3307a', duration: 60, timestamp: Date.now() - 3600000 },
+                        { imsi_commitment: 'b60a978d', duration: 70, timestamp: Date.now() - 7200000 },
+                        { imsi_commitment: 'fab56a2a', duration: 80, timestamp: Date.now() - 10800000 }
+                    ] : null
+                },
+                'contract_1f9491b8': {
+                    contract_id: '1f9491b85a3c2b4d6e8f9a0b1c2d3e4f5a6b7c8d',
+                    participants: ['T-Mobile', 'Vodafone'], can_decrypt: currentOperator === 'tmobile' || currentOperator === 'vodafone',
+                    total_settlement: 12500, decrypted_rate: (currentOperator === 'tmobile' || currentOperator === 'vodafone') ? 12 : null,
+                    sessions: (currentOperator === 'tmobile' || currentOperator === 'vodafone') ? [
+                        { imsi_commitment: '1543fa98', duration: 90, timestamp: Date.now() - 14400000 },
+                        { imsi_commitment: '129971d3', duration: 105, timestamp: Date.now() - 18000000 }
+                    ] : null
+                }
+            };
+        }
+
+        async function switchOperator(operator) {
+            currentOperator = operator;
+            document.querySelectorAll('.operator-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelector(`.operator-btn.${operator}`).classList.add('active');
+            
+            const info = operatorInfo[operator];
+            document.getElementById('operator-info').innerHTML = `<h3>👤 ${info.name} Dashboard</h3><p>${info.description}</p>`;
+            
+            const validatorView = document.getElementById('validator-view');
+            if (operator === 'validator') {
+                validatorView.style.display = 'block';
+                await loadValidatorView();
+            } else {
+                validatorView.style.display = 'none';
+            }
+            
+            await loadContractsFromAPI();
+            loadContracts();
+            loadSettlements();
+        }
+
+        function loadContracts() {
+            const container = document.getElementById('contracts-list');
+            container.innerHTML = '';
+
+            if (Object.keys(contractsData).length === 0) {
+                container.innerHTML = '<div style="text-align: center; color: #666; padding: 20px;">Loading contracts...</div>';
+                return;
+            }
+
+            Object.keys(contractsData).forEach(contractId => {
+                const contract = contractsData[contractId];
+                const canDecrypt = contract.can_decrypt !== false;
+                
+                const contractDiv = document.createElement('div');
+                contractDiv.className = `contract-item ${canDecrypt ? 'visible' : 'encrypted'}`;
+                
+                let contractContent = '';
+                
+                if (currentOperator === 'validator') {
+                    contractContent = `
+                        <div class="contract-header">
+                            <strong>Contract ${contractId.substring(9, 17)}</strong>
+                            <span class="access-badge encrypted">Public Only</span>
+                        </div>
+                        <div class="contract-id">ID: ${contract.contract_id || contract.id}</div>
+                        <div class="contract-details">
+                            <div class="detail-row"><span class="detail-label">Settlement Amount:</span><span class="detail-value">$${contract.total_settlement.toLocaleString()}</span></div>
+                            <div class="detail-row"><span class="detail-label">Rate per Minute:</span><span class="encrypted-value">🔒 ENCRYPTED</span></div>
+                        </div>
+                    `;
+                } else if (canDecrypt && contract.decrypted_rate) {
+                    contractContent = `
+                        <div class="contract-header">
+                            <strong>${contract.participants.join(' ↔ ')} Contract</strong>
+                            <span class="access-badge can-decrypt">✅ Decrypted</span>
+                        </div>
+                        <div class="contract-id">ID: ${contract.contract_id || contract.id}</div>
+                        <div class="contract-details">
+                            <div class="detail-row"><span class="detail-label">Rate per Minute:</span><span class="detail-value">$${contract.decrypted_rate}</span></div>
+                            <div class="detail-row"><span class="detail-label">Total Sessions:</span><span class="detail-value">${contract.sessions ? contract.sessions.length : 0}</span></div>
+                            <div class="detail-row"><span class="detail-label">Settlement:</span><span class="detail-value">$${contract.total_settlement.toLocaleString()}</span></div>
+                        </div>
+                        <div class="zk-proof-section">
+                            <div class="zk-proof-title">🔐 Zero-Knowledge Proofs</div>
+                            <div class="proof-status"><div class="status-indicator verified"></div><span>Billing calculation verified</span></div>
+                            <div class="proof-status"><div class="status-indicator hidden"></div><span>IMSI data hidden via commitments</span></div>
+                        </div>
+                    `;
+                    
+                    if (contract.sessions) {
+                        contractContent += '<h4>Private Sessions:</h4>';
+                        contract.sessions.forEach((session, idx) => {
+                            contractContent += `
+                                <div class="session-item">
+                                    <strong>Session ${idx + 1}:</strong> IMSI ${session.imsi_commitment} (${session.duration} min)<br>
+                                    <small>Time: ${new Date(session.timestamp).toLocaleString()}</small>
+                                </div>
+                            `;
+                        });
+                    }
+                } else {
+                    contractContent = `
+                        <div class="contract-header">
+                            <strong>Contract ${contractId.substring(9, 17)}</strong>
+                            <span class="access-badge encrypted">🔒 Encrypted</span>
+                        </div>
+                        <div class="contract-id">ID: ${contract.contract_id || contract.id}</div>
+                        <div class="contract-details">
+                            <div class="detail-row"><span class="detail-label">Participants:</span><span class="encrypted-value">🔒 ENCRYPTED</span></div>
+                            <div class="detail-row"><span class="detail-label">Rate per Minute:</span><span class="encrypted-value">🔒 ENCRYPTED</span></div>
+                            <div class="detail-row"><span class="detail-label">Session Details:</span><span class="encrypted-value">🔒 ENCRYPTED</span></div>
+                            <div class="detail-row"><span class="detail-label">Public Settlement:</span><span class="detail-value">$${contract.total_settlement.toLocaleString()}</span></div>
+                        </div>
+                    `;
+                }
+                
+                contractDiv.innerHTML = contractContent;
+                container.appendChild(contractDiv);
+            });
+        }
+
+        function loadSettlements() {
+            const container = document.getElementById('settlements-list');
+            container.innerHTML = '';
+
+            Object.keys(contractsData).forEach(contractId => {
+                const contract = contractsData[contractId];
+                const canDecrypt = contract.can_decrypt !== false;
+                
+                const settlementDiv = document.createElement('div');
+                settlementDiv.className = 'settlement-summary';
+                
+                let settlementContent = `
+                    <div class="settlement-amount">$${contract.total_settlement.toLocaleString()}</div>
+                    <div class="settlement-details">
+                        ${canDecrypt || currentOperator === 'validator' ? contract.participants.join(' ↔ ') : 'Encrypted Parties'}<br>
+                        <small>Settlement Period: Last 30 days</small>
+                    </div>
+                `;
+                
+                if (canDecrypt && contract.decrypted_rate) {
+                    settlementContent += `
+                        <div class="zk-proof-section" style="margin-top: 15px;">
+                            <div class="zk-proof-title">Settlement ZK Proof</div>
+                            <div class="proof-status"><div class="status-indicator verified"></div><span>Sum of ${contract.sessions ? contract.sessions.length : 0} sessions = $${contract.total_settlement.toLocaleString()}</span></div>
+                            <div class="proof-status"><div class="status-indicator verified"></div><span>Rate × Duration calculations verified</span></div>
+                        </div>
+                    `;
+                }
+                
+                settlementDiv.innerHTML = settlementContent;
+                container.appendChild(settlementDiv);
+            });
+        }
+
+        async function loadValidatorView() {
+            const container = document.getElementById('validator-content');
+            container.innerHTML = '<p style="color: #2c3e50; margin-bottom: 20px;">As a validator, you can verify all settlements are mathematically correct without seeing private contract terms or subscriber data.</p>';
+            
+            Object.keys(contractsData).forEach(contractId => {
+                const contract = contractsData[contractId];
+                const validationDiv = document.createElement('div');
+                validationDiv.className = 'validation-item';
+                validationDiv.innerHTML = `
+                    <h4>Contract ${contractId.substring(9, 17)} Validation</h4>
+                    <div class="proof-status"><div class="status-indicator verified"></div><strong>Settlement Proof:</strong> $${contract.total_settlement.toLocaleString()} ✅ VERIFIED</div>
+                    <div class="proof-status"><div class="status-indicator verified"></div><strong>Billing Calculations:</strong> All sessions ✅ VERIFIED</div>
+                    <div class="proof-status"><div class="status-indicator hidden"></div><strong>Private Data:</strong> IMSI, rates, session details HIDDEN</div>
+                    <div style="margin-top: 10px; padding: 10px; background: #f8f9fa; border-radius: 5px; font-size: 12px;">
+                        <strong>ZK Proof Hash:</strong> <code>zk_${contractId}_${Math.random().toString(36).substr(2, 8)}</code>
+                    </div>
+                `;
+                container.appendChild(validationDiv);
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', async function() {
+            await testConnection();
+            await loadContractsFromAPI();
+            loadContracts();
+            loadSettlements();
+        });
+    </script>
+</body>
+</html>

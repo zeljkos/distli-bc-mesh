@@ -1,0 +1,142 @@
+  📋 Raw curl Commands for ZK Proof Contracts
+
+  1. Check Current Blockchain Status
+
+  # Check API health
+  curl -s http://192.168.200.133:8080/health
+
+  # Check blockchain status  
+  curl -s http://192.168.200.133:8080/api/status
+
+  # Check current blocks
+  curl -s http://192.168.200.133:8080/api/blocks?limit=10
+
+  2. Add T-Mobile <-> Orange ZK Contract
+
+  curl -X POST http://192.168.200.133:8080/api/tenant-blockchain-update \
+    -H "Content-Type: application/json" \
+    -d '{
+      "network_id": "zk_contracts_demo",
+      "peer_id": "operator_tmobile", 
+      "timestamp": 1756295000,
+      "new_blocks": [
+        {
+          "block_id": 1,
+          "block_hash": "zk_block_tm_orange_001",
+          "timestamp": 1756295001,
+          "previous_hash": "genesis_zk",
+          "network_id": "zk_contracts_demo",
+          "transactions": [
+            "{\"id\":\"zkcontract_tm_orange_001\",\"from\":\"T-Mobile\",\"to\":\"Orange\",\"amount\":0,\"timestamp\":1756295001,\"tx_type\":{\"Message\":{\"content\":\"ZK Private Contract | Parties: T-Mobile <-> Orange | Rate: $15/min (ENCRYPTED) | Settlement: 
+  $15750 | Sessions: 3 | ZK Proofs: [billing_correctness: verified, settlement_aggregation: verified, range_proofs: verified] | IMSI Privacy: enabled\"}}}"
+          ]
+        }
+      ]
+    }'
+
+  3. Add T-Mobile <-> Vodafone ZK Contract
+
+  curl -X POST http://192.168.200.133:8080/api/tenant-blockchain-update \
+    -H "Content-Type: application/json" \
+    -d '{
+      "network_id": "zk_contracts_demo",
+      "peer_id": "operator_tmobile",
+      "timestamp": 1756295100,
+      "new_blocks": [
+        {
+          "block_id": 2,
+          "block_hash": "zk_block_tm_vodafone_002",
+          "timestamp": 1756295101,
+          "previous_hash": "zk_block_tm_orange_001",
+          "network_id": "zk_contracts_demo",
+          "transactions": [
+            "{\"id\":\"zkcontract_tm_vodafone_002\",\"from\":\"T-Mobile\",\"to\":\"Vodafone\",\"amount\":0,\"timestamp\":1756295101,\"tx_type\":{\"Message\":{\"content\":\"ZK Private Contract | Parties: T-Mobile <-> Vodafone | Rate: $12/min (ENCRYPTED) | 
+  Settlement: $13800 | Sessions: 2 | ZK Proofs: [billing_correctness: verified, settlement_aggregation: verified, range_proofs: verified] | IMSI Privacy: enabled\"}}}"
+          ]
+        }
+      ]
+    }'
+
+  4. Add ZK Proof Sessions with IMSI Commitments
+
+  curl -X POST http://192.168.200.133:8080/api/tenant-blockchain-update \
+    -H "Content-Type: application/json" \
+    -d '{
+      "network_id": "zk_contracts_demo",
+      "peer_id": "operator_tmobile",
+      "timestamp": 1756295200,
+      "new_blocks": [
+        {
+          "block_id": 3,
+          "block_hash": "zk_block_sessions_003", 
+          "timestamp": 1756295201,
+          "previous_hash": "zk_block_tm_vodafone_002",
+          "network_id": "zk_contracts_demo",
+          "transactions": [
+            "{\"id\":\"zksession_tm_orange_001\",\"from\":\"T-Mobile\",\"to\":\"Orange\",\"amount\":900,\"timestamp\":1756295201,\"tx_type\":{\"Message\":{\"content\":\"ZK Private Session | Contract: T-Mobile <-> Orange | IMSI: 6fe3307a (COMMITMENT) | Duration: 
+  60min | Amount: $900 (ENCRYPTED) | Billing ZK Proof: verified | Range Proof: [0-240min] verified\"}}}",
+            "{\"id\":\"zksession_tm_orange_002\",\"from\":\"T-Mobile\",\"to\":\"Orange\",\"amount\":1050,\"timestamp\":1756295202,\"tx_type\":{\"Message\":{\"content\":\"ZK Private Session | Contract: T-Mobile <-> Orange | IMSI: b60a978d (COMMITMENT) | Duration:
+   70min | Amount: $1050 (ENCRYPTED) | Billing ZK Proof: verified | Range Proof: [0-240min] verified\"}}}",
+            "{\"id\":\"zksession_tm_vodafone_001\",\"from\":\"T-Mobile\",\"to\":\"Vodafone\",\"amount\":1080,\"timestamp\":1756295203,\"tx_type\":{\"Message\":{\"content\":\"ZK Private Session | Contract: T-Mobile <-> Vodafone | IMSI: 1543fa98 (COMMITMENT) | 
+  Duration: 90min | Amount: $1080 (ENCRYPTED) | Billing ZK Proof: verified | Range Proof: [0-240min] verified\"}}}"
+          ]
+        }
+      ]
+    }'
+
+  5. Add ZK Settlement with Validator Signature
+
+  curl -X POST http://192.168.200.133:8080/api/tenant-blockchain-update \
+    -H "Content-Type: application/json" \
+    -d '{
+      "network_id": "zk_contracts_demo",
+      "peer_id": "validator_settlement",
+      "timestamp": 1756295300,
+      "new_blocks": [
+        {
+          "block_id": 4,
+          "block_hash": "zk_block_settlement_004",
+          "timestamp": 1756295301,
+          "previous_hash": "zk_block_sessions_003", 
+          "network_id": "zk_contracts_demo",
+          "transactions": [
+            "{\"id\":\"zk_settlement_tm_orange_001\",\"from\":\"Validator\",\"to\":\"Settlement\",\"amount\":15750,\"timestamp\":1756295301,\"tx_type\":{\"Message\":{\"content\":\"ZK Settlement Verification | Contract: T-Mobile <-> Orange | Total: $15750 | 
+  Sessions: 3 | Settlement Aggregation Proof: VERIFIED | Billing Correctness Proof: VERIFIED | Private Data: HIDDEN | Validator Signature: validator_001_abc123\"}}}"
+          ]
+        }
+      ]
+    }'
+
+  6. Verify Contracts Are Added
+
+  # Check all blocks  
+  curl -s http://192.168.200.133:8080/api/blocks?limit=20
+
+  # Check ZK contracts demo blocks only
+  curl -s http://192.168.200.133:8080/api/blocks?limit=20 | grep -i "zk_contracts_demo"
+
+  7. Test Different Operator Views (ZK Proof API)
+
+  # T-Mobile view (can see both contracts decrypted)
+  curl -s http://192.168.200.133:8080/api/operator-contracts?operator=tmobile
+
+  # Orange view (can see T-Mobile<->Orange only)
+  curl -s http://192.168.200.133:8080/api/operator-contracts?operator=orange
+
+  # Vodafone view (can see T-Mobile<->Vodafone only) 
+  curl -s http://192.168.200.133:8080/api/operator-contracts?operator=vodafone
+
+  # AT&T view (all contracts encrypted)
+  curl -s http://192.168.200.133:8080/api/operator-contracts?operator=att
+
+  # Validator view (can verify without seeing private data)
+  curl -s http://192.168.200.133:8080/api/operator-contracts?operator=validator
+
+  8. View in Dashboard
+
+  # Open enterprise dashboard
+  echo "Enterprise Dashboard: http://192.168.200.133:9090"
+
+  # Open ZK proof dashboard  
+  echo "ZK Proof Dashboard: http://192.168.200.133:9090/zk"
+

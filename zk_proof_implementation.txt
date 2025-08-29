@@ -1,0 +1,164 @@
+  Now, let me recapitulate what needs to be done for real ZK proof implementation with Bulletproofs:
+
+  Current State (Mock/Demo)
+
+  What we have now is a demonstration system that simulates ZK proofs:
+  - Contract data is simply marked as "ENCRYPTED" or shown in plaintext based on role
+  - No actual cryptographic proofs are generated or verified
+  - IMSI commitments are just hex strings, not real cryptographic commitments
+  - Settlement proofs are just labels saying "VERIFIED"
+
+  Real ZK Proof Implementation with Bulletproofs
+
+  1. Add Bulletproofs Dependency
+
+  [dependencies]
+  bulletproofs = "4.0"
+  curve25519-dalek = "4.0"
+  merlin = "3.0"  # For Fiat-Shamir transformation
+
+  2. Core ZK Proof Components Needed
+
+  A. Range Proofs for Billing
+
+  // Prove call duration is within valid range (0-240 minutes)
+  // without revealing actual duration
+  use bulletproofs::{BulletproofGens, PedersenGens, RangeProof};
+
+  fn create_duration_range_proof(duration: u64) -> RangeProof {
+      // Prove: 0 <= duration <= 240
+      // Without revealing the actual duration value
+  }
+
+  B. IMSI Commitment Scheme
+
+  // Create cryptographic commitment to IMSI
+  // that hides the actual subscriber identity
+  fn create_imsi_commitment(imsi: &str) -> Commitment {
+      // Use Pedersen commitment: C = g^m * h^r
+      // where m = IMSI, r = random blinding factor
+  }
+
+  C. Settlement Aggregation Proof
+
+  // Prove total settlement = sum of individual sessions
+  // without revealing individual session amounts
+  fn create_settlement_proof(
+      sessions: Vec<SessionAmount>,
+      total: u64
+  ) -> AggregationProof {
+      // Prove: total = session1 + session2 + ... + sessionN
+      // Using homomorphic properties of commitments
+  }
+
+  D. Billing Correctness Proof
+
+  // Prove billing calculation is correct
+  // without revealing rate or duration
+  fn create_billing_proof(
+      rate_commitment: Commitment,
+      duration_commitment: Commitment,
+      amount_commitment: Commitment
+  ) -> CorrectnessProof {
+      // Prove: amount = rate * duration
+      // Using zero-knowledge multiplication proof
+  }
+
+  3. Modified Contract Structure
+
+  pub struct ZKContract {
+      pub contract_id: Hash,
+      pub participants_commitment: Commitment,  // Not plaintext
+      pub rate_commitment: Commitment,          // Hidden rate
+      pub settlement_proof: AggregationProof,   // Cryptographic proof
+      pub public_parameters: PublicParams,      // For verification
+  }
+
+  pub struct ZKSession {
+      pub imsi_commitment: Commitment,          // Not just hex string
+      pub duration_range_proof: RangeProof,     // Actual proof
+      pub billing_proof: CorrectnessProof,      // Actual proof
+      pub amount_commitment: Commitment,        // Hidden amount
+  }
+
+  4. Verification Functions
+
+  impl ZKContract {
+      pub fn verify_settlement(&self) -> bool {
+          // Cryptographically verify the settlement proof
+          // Anyone can verify without learning private data
+      }
+
+      pub fn verify_billing(&self, session: &ZKSession) -> bool {
+          // Verify billing calculation is correct
+          // without learning rate, duration, or amount
+      }
+  }
+
+  5. Key Management
+
+  pub struct OperatorKeys {
+      pub proving_key: ProvingKey,
+      pub verifying_key: VerifyingKey,
+      pub blinding_factors: Vec<Scalar>,  // For commitments
+  }
+
+  6. Integration Points
+
+  The real ZK proof system would integrate at these points:
+
+  1. Contract Creation: Generate commitments and initial proofs
+  2. Session Recording: Create range proofs and billing proofs
+  3. Settlement: Generate aggregation proof
+  4. Verification: Anyone can verify proofs without private keys
+
+  7. Example Real Implementation Flow
+
+  // When T-Mobile creates a session with Orange
+  let session = {
+      // Create commitments
+      let imsi_commitment = create_imsi_commitment("310260123456789");
+      let duration_commitment = commit_to_value(60);  // 60 minutes
+
+      // Create range proof that duration is valid
+      let range_proof = prove_range(60, 0, 240);
+
+      // Create billing proof
+      let amount = rate * duration;
+      let billing_proof = prove_multiplication(
+          rate_commitment,
+          duration_commitment,
+          amount_commitment
+      );
+
+      ZKSession {
+          imsi_commitment,
+          duration_range_proof: range_proof,
+          billing_proof,
+          amount_commitment,
+      }
+  };
+
+  // Anyone can verify without knowing values
+  assert!(session.verify_range_proof());
+  assert!(session.verify_billing_proof());
+
+  8. Benefits of Real Implementation
+
+  1. True Privacy: Actual cryptographic hiding of sensitive data
+  2. Verifiable Computation: Mathematical proofs of correctness
+  3. Non-repudiation: Cryptographic evidence of settlements
+  4. Regulatory Compliance: Auditable without revealing customer data
+  5. Trustless Verification: No need to trust operators
+
+  9. Implementation Roadmap
+
+  Phase 1: Add Bulletproofs library and basic range proofs
+  Phase 2: Implement Pedersen commitments for values
+  Phase 3: Add multiplication proofs for billing
+  Phase 4: Implement aggregation proofs for settlements
+  Phase 5: Add signature schemes for non-repudiation
+  Phase 6: Performance optimization and batching
+
+  This would transform the current mock system into a production-ready ZK proof system for private GSM roaming contracts, providing real cryptographic privacy and verifiability.
+

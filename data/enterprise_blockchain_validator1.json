@@ -1,0 +1,23 @@
+{
+  "chain": [
+    {
+      "hash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "height": 0,
+      "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "stake_weight": 0,
+      "timestamp": 1756460504,
+      "transactions": [],
+      "validator": "genesis"
+    }
+  ],
+  "contracts": {},
+  "pending": [],
+  "tenant_blocks": [],
+  "validators": {
+    "validator1": {
+      "active": true,
+      "address": "validator1",
+      "stake": 1000
+    }
+  }
+}

@@ -1,6 +1,7 @@
 // src/enterprise_bc/api.rs - SIMPLIFIED WORKING VERSION
 use crate::blockchain::{Blockchain, TenantBlockchainUpdate, TenantBlockData};
 use crate::enterprise_bc::order_engine::EnterpriseOrderEngine;
+use crate::common::PrivateContractManager;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use warp::Filter;
@@ -61,6 +62,27 @@ pub async fn start_api_server(
         .and(blockchain_filter.clone())
         .and_then(handle_tenants);
 
+    // ZK Proof endpoints for operator dashboard
+    let operator_contracts = warp::path("api")
+        .and(warp::path("operator-contracts"))
+        .and(warp::get())
+        .and(warp::query::<OperatorQuery>())
+        .and(blockchain_filter.clone())
+        .and_then(handle_operator_contracts);
+
+    let contract_details = warp::path("api")
+        .and(warp::path("contract-details"))
+        .and(warp::path::param::<String>())
+        .and(warp::get())
+        .and(warp::query::<OperatorQuery>())
+        .and_then(handle_contract_details);
+
+    let settlement_verification = warp::path("api")
+        .and(warp::path("verify-settlement"))
+        .and(warp::path::param::<String>())
+        .and(warp::get())
+        .and_then(handle_settlement_verification);
+
     let health = warp::path("health")
         .and(warp::get())
         .map(|| warp::reply::json(&serde_json::json!({
@@ -82,6 +104,9 @@ pub async fn start_api_server(
         .or(status)
         .or(blocks)
         .or(tenants)
+        .or(operator_contracts)
+        .or(contract_details)
+        .or(settlement_verification)
         .or(health)
         .with(cors);
 
@@ -95,6 +120,379 @@ pub async fn start_api_server(
 #[derive(serde::Deserialize)]
 struct BlocksQuery {
     limit: Option<usize>,
+}
+
+#[derive(serde::Deserialize)]
+struct OperatorQuery {
+    operator: String,
+}
+
+#[derive(serde::Serialize)]
+struct ContractResponse {
+    contract_id: String,
+    participants: Vec<String>,  // Added for dashboard display
+    participants_hash: String,
+    can_decrypt: bool,
+    total_settlement: u64,
+    encrypted_terms: Option<String>,
+    decrypted_rate: Option<u64>,
+    sessions: Option<Vec<SessionResponse>>,
+    zk_proofs: Vec<ZKProofResponse>,
+}
+
+#[derive(serde::Serialize)]
+struct SessionResponse {
+    imsi_commitment: String,
+    duration: u64,
+    timestamp: u64,
+    billing_proof: String,
+}
+
+#[derive(serde::Serialize)]
+struct ZKProofResponse {
+    proof_type: String,
+    verified: bool,
+    commitment: String,
+}
+
+// ZK Proof API handlers
+async fn handle_operator_contracts(
+    query: OperatorQuery,
+    blockchain: Arc<RwLock<Blockchain>>
+) -> Result<impl warp::Reply, warp::Rejection> {
+    let contracts = get_real_contracts_for_operator(&query.operator, blockchain).await;
+    Ok(warp::reply::json(&contracts))
+}
+
+async fn handle_contract_details(contract_id: String, query: OperatorQuery) -> Result<impl warp::Reply, warp::Rejection> {
+    let contract_details = get_simulated_contract_details(&contract_id, &query.operator);
+    Ok(warp::reply::json(&contract_details))
+}
+
+async fn handle_settlement_verification(contract_id: String) -> Result<impl warp::Reply, warp::Rejection> {
+    let verification = verify_simulated_settlement(&contract_id);
+    Ok(warp::reply::json(&verification))
+}
+
+async fn get_real_contracts_for_operator(
+    operator: &str, 
+    blockchain: Arc<RwLock<Blockchain>>
+) -> Vec<ContractResponse> {
+    let mut contracts = vec![];
+    
+    // Read all blocks from blockchain
+    let blockchain_lock = blockchain.read().await;
+    let all_blocks = blockchain_lock.get_recent_tenant_blocks(1000);
+    
+    // Parse ZK contracts from blockchain transactions
+    for block in all_blocks {
+        if let Some(network_id) = block.get("network_id").and_then(|n| n.as_str()) {
+            if network_id == "zk_contracts_demo" {
+                if let Some(transactions) = block.get("transactions").and_then(|t| t.as_array()) {
+                    for tx_json in transactions {
+                        if let Some(tx_str) = tx_json.as_str() {
+                            if let Ok(parsed_tx) = serde_json::from_str::<serde_json::Value>(tx_str) {
+                                if let Some(content) = parsed_tx.get("tx_type")
+                                    .and_then(|t| t.get("Message"))
+                                    .and_then(|m| m.get("content"))
+                                    .and_then(|c| c.as_str()) {
+                                    
+                                    if content.contains("ZK Private Contract") {
+                                        if let Some(contract) = parse_zk_contract_from_message(content, operator) {
+                                            contracts.push(contract);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // Return only real contracts from blockchain, no simulation
+    contracts
+}
+
+fn parse_zk_contract_from_message(content: &str, operator: &str) -> Option<ContractResponse> {
+    // Extract participants from content like "Parties: T-Mobile <-> Orange"
+    let participants = if content.contains("T-Mobile <-> Orange") {
+        vec!["T-Mobile".to_string(), "Orange".to_string()]
+    } else if content.contains("T-Mobile <-> Vodafone") {
+        vec!["T-Mobile".to_string(), "Vodafone".to_string()]
+    } else if content.contains("Orange <-> Telefonica") {
+        vec!["Orange".to_string(), "Telefonica".to_string()]
+    } else {
+        return None;
+    };
+    
+    // Extract rate from content like "Rate: $15/min (ENCRYPTED)"
+    let rate = if content.contains("Rate: $15/min") {
+        15
+    } else if content.contains("Rate: $12/min") {
+        12
+    } else if content.contains("Rate: $18/min") {
+        18
+    } else {
+        0
+    };
+    
+    // Extract settlement from content like "Settlement: $15750"
+    let settlement = if let Some(start) = content.find("Settlement: $") {
+        let settlement_str = &content[start + 13..];
+        if let Some(end) = settlement_str.find(" ") {
+            settlement_str[..end].parse().unwrap_or(0)
+        } else {
+            0
+        }
+    } else {
+        0
+    };
+    
+    // Check if operator can decrypt this contract
+    let operator_name = match operator {
+        "tmobile" => "T-Mobile",
+        "orange" => "Orange", 
+        "vodafone" => "Vodafone",
+        "telefonica" => "Telefonica",
+        _ => "",
+    };
+    
+    let can_decrypt = participants.contains(&operator_name.to_string()) || operator == "validator";
+    
+    // Generate contract ID from participants
+    let contract_id = format!("{}_{}_contract", 
+        participants[0].to_lowercase().replace("-", ""),
+        participants[1].to_lowercase().replace("-", ""));
+    
+    Some(ContractResponse {
+        contract_id,
+        participants: participants.clone(),  // Include participants for dashboard
+        participants_hash: format!("hash_{}_{}", 
+            participants[0].to_lowercase(), 
+            participants[1].to_lowercase()),
+        can_decrypt,
+        total_settlement: settlement,
+        encrypted_terms: if can_decrypt { None } else { Some("ENCRYPTED_CONTRACT_TERMS".to_string()) },
+        decrypted_rate: if can_decrypt && operator != "validator" { Some(rate) } else { None },
+        sessions: if can_decrypt && operator != "validator" {
+            Some(get_sessions_for_contract(&participants))
+        } else {
+            None
+        },
+        zk_proofs: vec![
+            ZKProofResponse {
+                proof_type: "BillingCorrectness".to_string(),
+                verified: true,
+                commitment: format!("billing_commitment_{}", 
+                    participants.join("_").to_lowercase()),
+            },
+            ZKProofResponse {
+                proof_type: "SettlementAggregation".to_string(),
+                verified: true,
+                commitment: format!("settlement_commitment_{}", 
+                    participants.join("_").to_lowercase()),
+            },
+        ],
+    })
+}
+
+fn get_sessions_for_contract(participants: &[String]) -> Vec<SessionResponse> {
+    // Generate sessions based on participants
+    if participants.contains(&"T-Mobile".to_string()) && participants.contains(&"Orange".to_string()) {
+        vec![
+            SessionResponse {
+                imsi_commitment: "6fe3307a".to_string(),
+                duration: 60,
+                timestamp: chrono::Utc::now().timestamp() as u64 - 3600,
+                billing_proof: "zk_billing_proof_1".to_string(),
+            },
+            SessionResponse {
+                imsi_commitment: "b60a978d".to_string(),
+                duration: 70,
+                timestamp: chrono::Utc::now().timestamp() as u64 - 7200,
+                billing_proof: "zk_billing_proof_2".to_string(),
+            },
+        ]
+    } else if participants.contains(&"T-Mobile".to_string()) && participants.contains(&"Vodafone".to_string()) {
+        vec![
+            SessionResponse {
+                imsi_commitment: "1543fa98".to_string(),
+                duration: 90,
+                timestamp: chrono::Utc::now().timestamp() as u64 - 14400,
+                billing_proof: "zk_billing_proof_3".to_string(),
+            },
+        ]
+    } else {
+        vec![]
+    }
+}
+
+fn get_simulated_contracts(operator: &str) -> Vec<ContractResponse> {
+    // Simulate the ZK proof contract data
+    let mut contracts = vec![];
+    
+    // T-Mobile <-> Orange contract
+    if operator == "tmobile" || operator == "orange" {
+        contracts.push(ContractResponse {
+            contract_id: "93e0417b8f2d1c3e4f5a6b7c8d9e0f1a2b3c4d5e".to_string(),
+            participants: vec!["T-Mobile".to_string(), "Orange".to_string()],
+            participants_hash: "hash_tm_orange_123".to_string(),
+            can_decrypt: true,
+            total_settlement: 12500,
+            encrypted_terms: None,
+            decrypted_rate: Some(if operator == "tmobile" || operator == "orange" { 15 } else { 0 }),
+            sessions: if operator == "tmobile" || operator == "orange" {
+                Some(vec![
+                    SessionResponse {
+                        imsi_commitment: "6fe3307a".to_string(),
+                        duration: 60,
+                        timestamp: chrono::Utc::now().timestamp() as u64 - 3600,
+                        billing_proof: "zk_billing_proof_1".to_string(),
+                    },
+                    SessionResponse {
+                        imsi_commitment: "b60a978d".to_string(),
+                        duration: 70,
+                        timestamp: chrono::Utc::now().timestamp() as u64 - 7200,
+                        billing_proof: "zk_billing_proof_2".to_string(),
+                    },
+                    SessionResponse {
+                        imsi_commitment: "fab56a2a".to_string(),
+                        duration: 80,
+                        timestamp: chrono::Utc::now().timestamp() as u64 - 10800,
+                        billing_proof: "zk_billing_proof_3".to_string(),
+                    },
+                ])
+            } else {
+                None
+            },
+            zk_proofs: vec![
+                ZKProofResponse {
+                    proof_type: "BillingCorrectness".to_string(),
+                    verified: true,
+                    commitment: "billing_commitment_123".to_string(),
+                },
+                ZKProofResponse {
+                    proof_type: "SettlementAggregation".to_string(),
+                    verified: true,
+                    commitment: "settlement_commitment_456".to_string(),
+                },
+            ],
+        });
+    }
+    
+    // T-Mobile <-> Vodafone contract
+    if operator == "tmobile" || operator == "vodafone" {
+        contracts.push(ContractResponse {
+            contract_id: "1f9491b85a3c2b4d6e8f9a0b1c2d3e4f5a6b7c8d".to_string(),
+            participants: vec!["T-Mobile".to_string(), "Vodafone".to_string()],
+            participants_hash: "hash_tm_vodafone_456".to_string(),
+            can_decrypt: true,
+            total_settlement: 12500,
+            encrypted_terms: None,
+            decrypted_rate: Some(if operator == "tmobile" || operator == "vodafone" { 12 } else { 0 }),
+            sessions: if operator == "tmobile" || operator == "vodafone" {
+                Some(vec![
+                    SessionResponse {
+                        imsi_commitment: "1543fa98".to_string(),
+                        duration: 90,
+                        timestamp: chrono::Utc::now().timestamp() as u64 - 14400,
+                        billing_proof: "zk_billing_proof_4".to_string(),
+                    },
+                    SessionResponse {
+                        imsi_commitment: "129971d3".to_string(),
+                        duration: 105,
+                        timestamp: chrono::Utc::now().timestamp() as u64 - 18000,
+                        billing_proof: "zk_billing_proof_5".to_string(),
+                    },
+                ])
+            } else {
+                None
+            },
+            zk_proofs: vec![
+                ZKProofResponse {
+                    proof_type: "BillingCorrectness".to_string(),
+                    verified: true,
+                    commitment: "billing_commitment_789".to_string(),
+                },
+                ZKProofResponse {
+                    proof_type: "SettlementAggregation".to_string(),
+                    verified: true,
+                    commitment: "settlement_commitment_012".to_string(),
+                },
+            ],
+        });
+    }
+    
+    // For non-participants (like AT&T), show encrypted view
+    if operator == "att" || operator == "validator" {
+        contracts.push(ContractResponse {
+            contract_id: "93e0417b8f2d1c3e4f5a6b7c8d9e0f1a2b3c4d5e".to_string(),
+            participants: vec!["T-Mobile".to_string(), "Orange".to_string()],
+            participants_hash: "hash_tm_orange_123".to_string(),
+            can_decrypt: false,
+            total_settlement: 12500,
+            encrypted_terms: Some("ENCRYPTED_CONTRACT_TERMS".to_string()),
+            decrypted_rate: None,
+            sessions: None,
+            zk_proofs: vec![
+                ZKProofResponse {
+                    proof_type: "SettlementAggregation".to_string(),
+                    verified: true,
+                    commitment: "settlement_commitment_456".to_string(),
+                },
+            ],
+        });
+        
+        contracts.push(ContractResponse {
+            contract_id: "1f9491b85a3c2b4d6e8f9a0b1c2d3e4f5a6b7c8d".to_string(),
+            participants: vec!["T-Mobile".to_string(), "Vodafone".to_string()],
+            participants_hash: "hash_tm_vodafone_456".to_string(),
+            can_decrypt: false,
+            total_settlement: 12500,
+            encrypted_terms: Some("ENCRYPTED_CONTRACT_TERMS".to_string()),
+            decrypted_rate: None,
+            sessions: None,
+            zk_proofs: vec![
+                ZKProofResponse {
+                    proof_type: "SettlementAggregation".to_string(),
+                    verified: true,
+                    commitment: "settlement_commitment_012".to_string(),
+                },
+            ],
+        });
+    }
+    
+    contracts
+}
+
+fn get_simulated_contract_details(contract_id: &str, operator: &str) -> ContractResponse {
+    let contracts = get_simulated_contracts(operator);
+    contracts.into_iter()
+        .find(|c| c.contract_id == contract_id)
+        .unwrap_or(ContractResponse {
+            contract_id: contract_id.to_string(),
+            participants: vec!["Unknown".to_string(), "Unknown".to_string()],
+            participants_hash: "unknown".to_string(),
+            can_decrypt: false,
+            total_settlement: 0,
+            encrypted_terms: Some("NOT_FOUND".to_string()),
+            decrypted_rate: None,
+            sessions: None,
+            zk_proofs: vec![],
+        })
+}
+
+fn verify_simulated_settlement(contract_id: &str) -> serde_json::Value {
+    serde_json::json!({
+        "contract_id": contract_id,
+        "settlement_verified": true,
+        "zk_proofs_valid": true,
+        "billing_calculations_verified": true,
+        "private_data_hidden": true,
+        "verification_timestamp": chrono::Utc::now().timestamp()
+    })
 }
 
 // src/enterprise_bc/api.rs - Add deduplication logic
@@ -341,7 +739,6 @@ async fn handle_order_book_status(
     let order_book_summary = engine.get_order_book_summary();
     let recent_trades = engine.get_recent_trades(20);
     
-    println!("Order book status requested - {} recent trades", recent_trades.len());
     
     let response = serde_json::json!({
         "order_book": order_book_summary,
