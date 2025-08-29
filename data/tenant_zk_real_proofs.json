@@ -1,18 +1,5 @@
 {
-  "chain": [
-    {
-      "hash": "0000000000000000000000000000000000000000000000000000000000000000",
-      "height": 0,
-      "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
-      "stake_weight": 0,
-      "timestamp": 1756471844,
-      "transactions": [],
-      "validator": "genesis"
-    }
-  ],
-  "contracts": {},
-  "pending": [],
-  "tenant_blocks": [
+  "blocks": [
     {
       "block_hash": "zk_real_proof_block_001",
       "block_id": 1001,
@@ -64,11 +51,8 @@
       ]
     }
   ],
-  "validators": {
-    "validator1": {
-      "active": true,
-      "address": "validator1",
-      "stake": 1000
-    }
-  }
+  "last_updated": 1756471976,
+  "network_id": "zk_real_proofs",
+  "total_blocks": 5,
+  "total_transactions": 5
 }

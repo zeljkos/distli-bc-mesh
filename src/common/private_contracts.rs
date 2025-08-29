@@ -5,6 +5,11 @@ use serde::{Deserialize, Serialize};
 use sha2::{Sha256, Digest};
 use std::collections::HashMap;
 
+// Import the real ZK range proof module
+use crate::common::zk_range_proofs::{
+    ZKRangeProofIntegration, SerializableRangeProof, BillingProofs
+};
+
 // Simulated cryptographic primitives (replace with real implementations)
 mod crypto {
     use super::*;
@@ -50,13 +55,8 @@ pub enum ProofType {
     SettlementAggregation,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RangeProof {
-    pub commitment: String,
-    pub proof_data: Vec<u8>,
-    pub min: u64,
-    pub max: u64,
-}
+// Use the real RangeProof from zk_range_proofs module
+pub type RangeProof = SerializableRangeProof;
 
 // Private roaming contract between two operators
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -129,6 +129,7 @@ pub struct PrivateSettlement {
 pub struct PrivateContractManager {
     contracts: HashMap<String, PrivateRoamingContract>,
     operator_keys: HashMap<String, OperatorKeys>,
+    zk_integration: ZKRangeProofIntegration,
 }
 
 #[derive(Clone)]
@@ -142,6 +143,7 @@ impl PrivateContractManager {
         Self {
             contracts: HashMap::new(),
             operator_keys: HashMap::new(),
+            zk_integration: ZKRangeProofIntegration::new(),
         }
     }
     
@@ -211,12 +213,21 @@ impl PrivateContractManager {
         duration_minutes: u64,
         amount: u64,
     ) -> Result<PrivateSession, String> {
-        // Create private session with ZK proofs (before getting mutable reference)
+        // Generate session ID
+        let session_id = format!("{}_{}", imsi, crate::common::time::current_timestamp());
+        let session_id_hash = crypto::hash(&session_id);
+        
+        // Create real range proof for duration using Bulletproofs
+        let duration_proof = self.zk_integration.create_duration_proof(
+            &session_id,
+            duration_minutes
+        )?;
+        
+        // Create private session with ZK proofs
         let session = PrivateSession {
-            session_id_hash: crypto::hash(&format!("{}_{}", imsi, 
-                crate::common::time::current_timestamp())),
+            session_id_hash,
             imsi_commitment: self.create_imsi_commitment(imsi),
-            duration_proof: self.create_range_proof(duration_minutes, 0, 10000),
+            duration_proof,
             billing_proof: self.create_billing_proof(duration_minutes, amount),
             timestamp: crate::common::time::current_timestamp(),
         };
@@ -284,7 +295,13 @@ impl PrivateContractManager {
         settlement: &PrivateSettlement
     ) -> bool {
         // Verify ZK proof without accessing private data
+        // In the future, this will also verify range proofs for sessions
         self.verify_zkproof(&settlement.settlement_proof)
+    }
+    
+    pub fn verify_session_proofs(&self, session: &PrivateSession) -> bool {
+        // Verify the duration range proof using real Bulletproofs verification
+        self.zk_integration.verify_duration_proof(&session.duration_proof)
     }
     
     pub fn get_visible_contracts(&self, operator: &str) -> Vec<ContractSummary> {
@@ -321,15 +338,6 @@ impl PrivateContractManager {
         crypto::hash(&format!("{}_nonce_{}", imsi, nonce))
     }
     
-    fn create_range_proof(&self, value: u64, min: u64, max: u64) -> RangeProof {
-        // In production: use Bulletproofs
-        RangeProof {
-            commitment: crypto::hash(&value.to_string()),
-            proof_data: vec![1, 2, 3], // Placeholder
-            min,
-            max,
-        }
-    }
     
     fn create_billing_proof(&self, duration: u64, amount: u64) -> ZKProof {
         // In production: use zk-SNARK to prove duration * rate = amount

@@ -34,6 +34,12 @@ sha2 = "0.10"
 hex = "0.4"
 rand = "0.8"
 
+# Zero-knowledge proof libraries
+bulletproofs = "4.0"
+curve25519-dalek-ng = { version = "4.1", features = ["serde"] }
+merlin = "3.0"
+rand_core = "0.6"
+
 # Server dependencies (native only)
 tokio = { version = "1.0", features = ["full"], optional = true }
 warp = { version = "0.3", optional = true }
