@@ -2,13 +2,21 @@
 use warp::Filter;
 
 pub async fn start_dashboard(port: u16) {
-    println!("Starting dashboard on port {}", port);
+    let country = match port {
+        9000 => "USA (T-Mobile HQ)",
+        9001 => "France (Orange HQ)", 
+        9002 => "Germany (Deutsche Telekom HQ)",
+        9003 => "UK (Vodafone HQ)",
+        _ => "Global Network"
+    };
+    
+    println!("Starting {} dashboard on port {}", country, port);
     
     let dashboard_html = warp::path::end()
-        .map(|| warp::reply::html(DASHBOARD_HTML));
+        .map(move || warp::reply::html(DASHBOARD_HTML.replace("{{COUNTRY}}", country)));
     
     let zk_dashboard_html = warp::path("zk")
-        .map(|| warp::reply::html(ZK_DASHBOARD_HTML));
+        .map(move || warp::reply::html(ZK_DASHBOARD_HTML.replace("{{COUNTRY}}", country)));
     
     let routes = dashboard_html.or(zk_dashboard_html);
     
@@ -23,7 +31,7 @@ const DASHBOARD_HTML: &str = r#"
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Enterprise Blockchain Dashboard - Cross-Network Trading</title>
+    <title>Enterprise Blockchain Dashboard - {{COUNTRY}}</title>
     <style>
         body {
             font-family: Arial, sans-serif;

@@ -2,8 +2,8 @@
 // Shows actual cryptographic proof generation and verification
 
 use distli_mesh_bc::common::{
-    PrivateContractManager, ContractTerms,
-    zk_range_proofs::{RangeProofGenerator, RangeProofVerifier, ZKRangeProofIntegration}
+    private_contracts::{PrivateContractManager, ContractTerms, DiscountTier},
+    zk_range_proofs::{RangeProofGenerator, RangeProofVerifier}
 };
 
 fn main() {
@@ -125,16 +125,17 @@ fn demonstrate_contract_integration() {
     println!("📞 Adding roaming sessions with ZK range proofs:");
     
     let test_sessions = vec![
-        ("US_subscriber_001", 45, 810),   // 45 min call
-        ("US_subscriber_002", 120, 2160), // 2 hour call
-        ("US_subscriber_003", 15, 270),   // 15 min call
+        ("310260123456789", 45, 810),     // 45 min call (T-Mobile USA)
+        ("310260987654321", 120, 2160),   // 2 hour call (T-Mobile USA)
+        ("208010555123789", 15, 270),     // 15 min call (Orange France)
     ];
     
     for (imsi, duration, amount) in test_sessions {
         match manager.add_private_session(&contract_id, "Verizon", imsi, duration, amount) {
             Ok(session) => {
                 println!("   ✅ Session added for {} ({} min)", imsi, duration);
-                println!("      - IMSI commitment: {}", &session.imsi_commitment[0..16]);
+                println!("      - IMSI commitment: {}...", 
+                    hex::encode(&session.imsi_commitment.commitment_bytes[0..8]));
                 println!("      - Duration proof size: {} bytes", 
                     session.duration_proof.proof_bytes.len());
                 

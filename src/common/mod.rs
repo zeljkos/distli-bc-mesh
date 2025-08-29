@@ -6,6 +6,7 @@ pub mod time;
 pub mod api_utils;
 pub mod contracts; // Add contracts module
 pub mod zk_range_proofs; // Zero-knowledge range proofs with Bulletproofs
+pub mod imsi_commitments; // IMSI commitment scheme with Pedersen commitments
 pub mod private_contracts; // Private contracts with ZK proofs
  // // Re-export commonly used types
 pub use types::{

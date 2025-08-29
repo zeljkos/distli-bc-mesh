@@ -10,6 +10,11 @@ use crate::common::zk_range_proofs::{
     ZKRangeProofIntegration, SerializableRangeProof, BillingProofs
 };
 
+// Import the real IMSI commitment module
+use crate::common::imsi_commitments::{
+    IMSICommitmentGenerator, IMSICommitment, imsi_utils
+};
+
 // Simulated cryptographic primitives (replace with real implementations)
 mod crypto {
     use super::*;
@@ -98,14 +103,17 @@ pub struct DiscountTier {
     pub discount_percentage: f32,
 }
 
-// Private session data
+// Private session data with real cryptographic commitments
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PrivateSession {
     pub session_id_hash: String,       // Hash of actual session ID
-    pub imsi_commitment: String,       // Commitment to IMSI without revealing it
+    pub imsi_commitment: IMSICommitment, // Real Pedersen commitment to IMSI
     pub duration_proof: RangeProof,    // Proves duration within valid range
     pub billing_proof: ZKProof,        // Proves billing calculation correct
     pub timestamp: u64,
+    // Additional fields for enhanced privacy
+    pub mcc: Option<String>,           // Mobile Country Code (can be public for routing)
+    pub commitment_version: String,    // For future cryptographic upgrades
 }
 
 // Settlement record with privacy
@@ -130,6 +138,7 @@ pub struct PrivateContractManager {
     contracts: HashMap<String, PrivateRoamingContract>,
     operator_keys: HashMap<String, OperatorKeys>,
     zk_integration: ZKRangeProofIntegration,
+    imsi_generator: IMSICommitmentGenerator,  // Real IMSI commitment generator
 }
 
 #[derive(Clone)]
@@ -144,6 +153,16 @@ impl PrivateContractManager {
             contracts: HashMap::new(),
             operator_keys: HashMap::new(),
             zk_integration: ZKRangeProofIntegration::new(),
+            imsi_generator: IMSICommitmentGenerator::new(),
+        }
+    }
+    
+    pub fn new_with_secure_key_management(master_key: [u8; 32]) -> Self {
+        Self {
+            contracts: HashMap::new(),
+            operator_keys: HashMap::new(),
+            zk_integration: ZKRangeProofIntegration::new(),
+            imsi_generator: IMSICommitmentGenerator::with_secure_key_management(master_key),
         }
     }
     
@@ -223,13 +242,23 @@ impl PrivateContractManager {
             duration_minutes
         )?;
         
+        // Extract MCC for potential public routing (optional)
+        let mcc = imsi_utils::extract_mcc_mnc(imsi)
+            .map(|(mcc, _)| mcc)
+            .ok();
+        
+        // Create real IMSI commitment using Pedersen commitment
+        let imsi_commitment = self.create_imsi_commitment(imsi, &session_id)?;
+        
         // Create private session with ZK proofs
         let session = PrivateSession {
             session_id_hash,
-            imsi_commitment: self.create_imsi_commitment(imsi),
+            imsi_commitment,
             duration_proof,
             billing_proof: self.create_billing_proof(duration_minutes, amount),
             timestamp: crate::common::time::current_timestamp(),
+            mcc,
+            commitment_version: "pedersen_ristretto255_v1".to_string(),
         };
         
         // Add to encrypted sessions (in production, properly encrypt)
@@ -330,12 +359,30 @@ impl PrivateContractManager {
         visible
     }
     
-    // Zero-knowledge proof generation (simplified implementations)
-    fn create_imsi_commitment(&self, imsi: &str) -> String {
-        // In production: use Pedersen commitment or similar
-        use rand::Rng;
-        let nonce: u64 = rand::thread_rng().gen();
-        crypto::hash(&format!("{}_nonce_{}", imsi, nonce))
+    // Create real cryptographic IMSI commitment using Pedersen commitment
+    fn create_imsi_commitment(&mut self, imsi: &str, session_id: &str) -> Result<IMSICommitment, String> {
+        // Validate IMSI format first
+        imsi_utils::validate_imsi_format(imsi)?;
+        
+        // Create Pedersen commitment: C = g^imsi * h^r
+        self.imsi_generator.commit_to_imsi(imsi, session_id)
+    }
+    
+    // Verify IMSI commitment (for authorized parties during disputes)
+    pub fn verify_imsi_commitment(
+        &self, 
+        commitment: &IMSICommitment, 
+        session_id: &str, 
+        claimed_imsi: &str
+    ) -> Result<bool, String> {
+        // Only authorized operators can verify IMSI commitments
+        self.imsi_generator.verify_commitment_with_session(commitment, session_id, claimed_imsi)
+    }
+    
+    // Generate opening proof for IMSI commitment (for dispute resolution)
+    pub fn create_imsi_opening_proof(&self, session_id: &str) -> Result<String, String> {
+        let proof = self.imsi_generator.create_opening_proof(session_id)?;
+        serde_json::to_string(&proof).map_err(|e| e.to_string())
     }
     
     
@@ -437,9 +484,9 @@ mod tests {
         let vodafone_view = manager.get_visible_contracts("Vodafone");
         assert_eq!(vodafone_view.len(), 2);
         
-        // Add sessions and create settlement
+        // Add sessions and create settlement (with valid IMSI)
         manager.add_private_session(&contract1_id, "T-Mobile", 
-            "123456789", 100, 1500).unwrap();
+            "310260123456789", 100, 1500).unwrap();
         
         let settlement = manager.create_settlement(&contract1_id, "T-Mobile").unwrap();
         
